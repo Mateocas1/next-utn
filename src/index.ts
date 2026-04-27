@@ -1,7 +1,7 @@
-import { config } from './config/env';
+import { getEnv } from './config/env';
 import { createApp } from './presentation/app';
-import { connectToMongoDB } from './infrastructure/database/connection';
-import { connectToRedis } from './infrastructure/redis/connection';
+import { mongoDBConnection } from './infrastructure/database/connection';
+import { redisConnection } from './infrastructure/redis/connection';
 import { JWTService } from './infrastructure/auth/JWTService';
 import { BcryptPasswordHasher } from './infrastructure/auth/BcryptPasswordHasher';
 import { MongooseUserRepository } from './infrastructure/database/repositories/MongooseUserRepository';
@@ -14,22 +14,29 @@ import { ListChatsUseCase } from './application/use-cases/ListChatsUseCase';
 import { GetChatDetailsUseCase } from './application/use-cases/GetChatDetailsUseCase';
 import { SendMessageUseCase } from './application/use-cases/SendMessageUseCase';
 import { GetMessageHistoryUseCase } from './application/use-cases/GetMessageHistoryUseCase';
+import { InMemoryEventBus } from './infrastructure/events/InMemoryEventBus';
+import { RedisRateLimiter } from './infrastructure/redis/RedisRateLimiter';
+import { RedisIdempotencyStore } from './infrastructure/redis/RedisIdempotencyStore';
 
 async function bootstrap() {
   console.log('Starting Chat API...');
+  const config = getEnv();
 
   // Connect to databases
   console.log('Connecting to MongoDB...');
-  await connectToMongoDB();
+  await mongoDBConnection.connect();
   console.log('MongoDB connected');
 
   console.log('Connecting to Redis...');
-  const redisClient = await connectToRedis();
+  await redisConnection.connect();
   console.log('Redis connected');
 
   // Create infrastructure services
   const jwtService = new JWTService(config.JWT_SECRET, config.JWT_EXPIRES_IN);
   const passwordHasher = new BcryptPasswordHasher();
+  const eventBus = new InMemoryEventBus();
+  const rateLimiter = new RedisRateLimiter(redisConnection.getClient(), config.RATE_LIMIT_MAX, config.RATE_LIMIT_WINDOW);
+  const idempotencyStore = new RedisIdempotencyStore(redisConnection.getClient(), config.IDEMPOTENCY_TTL);
 
   // Create repositories
   const userRepository = new MongooseUserRepository();
@@ -51,7 +58,8 @@ async function bootstrap() {
   const getChatDetailsUseCase = new GetChatDetailsUseCase(chatRepository);
   const sendMessageUseCase = new SendMessageUseCase(
     chatRepository,
-    messageRepository
+    messageRepository,
+    eventBus
   );
   const getMessageHistoryUseCase = new GetMessageHistoryUseCase(
     chatRepository,
@@ -67,7 +75,9 @@ async function bootstrap() {
     getChatDetailsUseCase,
     sendMessageUseCase,
     getMessageHistoryUseCase,
-    jwtService
+    jwtService,
+    rateLimiter,
+    idempotencyStore
   );
 
   // Start server
