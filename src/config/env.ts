@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('production'), // Hardcodeado a production
   PORT: z.coerce.number().int().positive().default(3000),
   MONGO_URI: z.string().url(),
   REDIS_URL: z.string().url(),

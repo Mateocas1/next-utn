@@ -58,10 +58,10 @@ export function createApp(
     getMessageHistoryUseCase
   );
 
-  // Routes
-  app.use('/auth', createAuthRoutes(authController));
-  app.use('/chats', createChatRoutes(chatController, jwtService, idempotencyStore));
-  app.use('/messages', createMessageRoutes(messageController, jwtService, idempotencyStore));
+// Routes
+app.use('/api/users', createAuthRoutes(authController));
+app.use('/api/chats', createChatRoutes(chatController, jwtService, idempotencyStore));
+app.use('/api/messages', createMessageRoutes(messageController, jwtService, idempotencyStore));
 
   // Health check
   app.get('/health', (req, res) => {
