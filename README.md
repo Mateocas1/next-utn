@@ -10,7 +10,8 @@ Una API RESTful robusta y escalable para un clon de chat, construida con Node.js
 - **Paginación por Cursor**: Búsquedas O(log n) ultra rápidas para historiales de chat largos.
 - **Resiliencia**: Rate Limiting (Sliding Window), Idempotencia y Circuit Breakers respaldados por Redis.
 - **Validación Robusta**: Zod para validación de esquemas en todas las entradas.
-- **Testing Exhaustivo**: 283 tests (Unitarios, Integración y E2E) desarrollados bajo Strict TDD.
+- **Testing Exhaustivo**: Tests unitarios, de integración y E2E desarrollados bajo Strict TDD.
+- **Notificaciones en Tiempo Real**: Sistema de notificaciones via WebSocket para mensajes nuevos.
 
 ---
 
@@ -198,6 +199,54 @@ Todas las respuestas siguen el formato estandarizado: `{ success: boolean, data:
 }
 ```
 
+### Notificaciones (`/notifications`)
+*Requieren header `Authorization: Bearer <token>`*
+
+#### Listar Notificaciones
+`GET /notifications`
+```json
+// Response (200 OK)
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid-notification",
+      "userId": "uuid-user",
+      "title": "Nuevo mensaje",
+      "message": "Tienes un nuevo mensaje: Hola...",
+      "read": false,
+      "createdAt": "2023-10-25T10:15:00Z",
+      "metadata": {
+        "chatId": "uuid-chat",
+        "senderId": "uuid-sender"
+      }
+    }
+  ]
+}
+```
+
+#### Marcar Notificación como Leída
+`PATCH /notifications/:id/read`
+```json
+// Response (200 OK)
+{
+  "success": true,
+  "data": {
+    "id": "uuid-notification",
+    "userId": "uuid-user",
+    "title": "Nuevo mensaje",
+    "message": "Tienes un nuevo mensaje: Hola...",
+    "read": true,
+    "createdAt": "2023-10-25T10:15:00Z",
+    "readAt": "2023-10-25T10:16:00Z",
+    "metadata": {
+      "chatId": "uuid-chat",
+      "senderId": "uuid-sender"
+    }
+  }
+}
+```
+
 ---
 
 ## 🔌 Integración con el Frontend (React)
@@ -206,6 +255,7 @@ Para consumir esta API desde un clon de chat en React, se recomienda configurar 
 
 ```javascript
 import axios from 'axios';
+import { io } from 'socket.io-client';
 
 const api = axios.create({
   baseURL: 'http://localhost:3000',
@@ -220,17 +270,90 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Configuración de WebSocket
+const socket = io('http://localhost:3000', {
+  auth: {
+    token: localStorage.getItem('token')
+  },
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000
+});
+
+// Unirse a un chat
+export const joinChat = (chatId) => {
+  socket.emit('joinChat', chatId);
+};
+
+// Escuchar mensajes nuevos
+export const onMessageReceived = (callback) => {
+  socket.on('message', callback);
+};
+
+// Escuchar evento de typing
+export const onUserTyping = (callback) => {
+  socket.on('typing', callback);
+};
+
+// Escuchar notificaciones nuevas
+export const onNotificationReceived = (callback) => {
+  socket.on('notification', callback);
+};
+
+// Notificar que el usuario está escribiendo
+export const notifyTyping = (chatId) => {
+  api.post('/api/messages/typing', { chatId, isTyping: true });
+};
+
 // Ejemplo de uso: Enviar un mensaje con Idempotencia
 export const sendMessage = async (chatId, content) => {
   // Generar un UUID único para esta petición en el frontend
-  const idempotencyKey = crypto.randomUUID(); 
-  
-  const response = await api.post('/messages', 
+  const idempotencyKey = crypto.randomUUID();
+
+  const response = await api.post('/api/messages',
     { chatId, content },
     { headers: { 'Idempotency-Key': idempotencyKey } }
   );
   return response.data;
 };
+```
+
+## 🌐 WebSockets (Tiempo Real)
+
+La API soporta WebSockets para funcionalidades en tiempo real:
+
+### Configuración
+- **URL**: `ws://localhost:3000`
+- **Autenticación**: Incluir el token JWT en el handshake:
+  ```json
+  {
+    "auth": {
+      "token": "<JWT_TOKEN>"
+    }
+  }
+  ```
+
+### Eventos
+| Evento | Descripción | Payload |
+|---------|-------------|---------|
+| `connect` | Conexión establecida | - |
+| `message` | Nuevo mensaje recibido | `{ id, chatId, senderId, content, createdAt }` |
+| `typing` | Usuario está escribiendo | `{ userId, chatId }` |
+
+### Ejemplo de uso
+```javascript
+// Unirse a un chat
+socket.emit('joinChat', 'chat-id');
+
+// Escuchar mensajes
+socket.on('message', (data) => {
+  console.log('Nuevo mensaje:', data);
+});
+
+// Escuchar evento de typing
+socket.on('typing', (data) => {
+  console.log(`Usuario ${data.userId} está escribiendo...`);
+});
 ```
 
 ---

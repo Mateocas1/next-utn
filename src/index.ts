@@ -7,6 +7,7 @@ import { BcryptPasswordHasher } from './infrastructure/auth/BcryptPasswordHasher
 import { MongooseUserRepository } from './infrastructure/database/repositories/MongooseUserRepository';
 import { MongooseChatRepository } from './infrastructure/database/repositories/MongooseChatRepository';
 import { MongooseMessageRepository } from './infrastructure/database/repositories/MongooseMessageRepository';
+import { MongooseNotificationRepository } from './infrastructure/database/repositories/MongooseNotificationRepository';
 import { RegisterUserUseCase } from './application/use-cases/RegisterUserUseCase';
 import { LoginUserUseCase } from './application/use-cases/LoginUserUseCase';
 import { CreateChatUseCase } from './application/use-cases/CreateChatUseCase';
@@ -14,9 +15,19 @@ import { ListChatsUseCase } from './application/use-cases/ListChatsUseCase';
 import { GetChatDetailsUseCase } from './application/use-cases/GetChatDetailsUseCase';
 import { SendMessageUseCase } from './application/use-cases/SendMessageUseCase';
 import { GetMessageHistoryUseCase } from './application/use-cases/GetMessageHistoryUseCase';
+import { ListNotificationsUseCase } from './application/use-cases/ListNotificationsUseCase';
+import { MarkNotificationAsReadUseCase } from './application/use-cases/MarkNotificationAsReadUseCase';
+import { NotifyUserTypingUseCase } from './application/use-cases/NotifyUserTypingUseCase';
+import { SendNotificationUseCase } from './application/use-cases/SendNotificationUseCase';
+import { registerEventHandlers } from './application/event-handlers/registerEventHandlers';
+import { NotificationModel } from './infrastructure/database/models/NotificationModel';
 import { InMemoryEventBus } from './infrastructure/events/InMemoryEventBus';
 import { RedisRateLimiter } from './infrastructure/redis/RedisRateLimiter';
 import { RedisIdempotencyStore } from './infrastructure/redis/RedisIdempotencyStore';
+import { Server as SocketIOServer } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { WebSocketGateway } from './infrastructure/websocket/gateway';
+import { socketIOMiddleware } from './infrastructure/websocket/middleware';
 
 async function bootstrap() {
   console.log('Starting Chat API...');
@@ -42,6 +53,7 @@ async function bootstrap() {
   const userRepository = new MongooseUserRepository();
   const chatRepository = new MongooseChatRepository();
   const messageRepository = new MongooseMessageRepository();
+  const notificationRepository = new MongooseNotificationRepository(NotificationModel);
 
   // Create use cases
   const registerUserUseCase = new RegisterUserUseCase(
@@ -65,6 +77,15 @@ async function bootstrap() {
     chatRepository,
     messageRepository
   );
+  
+  // Create notification use cases
+  const listNotificationsUseCase = new ListNotificationsUseCase(notificationRepository);
+  const markNotificationAsReadUseCase = new MarkNotificationAsReadUseCase(notificationRepository);
+  const notifyUserTypingUseCase = new NotifyUserTypingUseCase(chatRepository, eventBus);
+  
+  // Create notification sender and register event handlers
+  const sendNotificationUseCase = new SendNotificationUseCase(notificationRepository, eventBus);
+  registerEventHandlers(eventBus, notificationRepository);
 
   // Create Express app
   const app = createApp(
@@ -75,17 +96,48 @@ async function bootstrap() {
     getChatDetailsUseCase,
     sendMessageUseCase,
     getMessageHistoryUseCase,
+    notifyUserTypingUseCase,
+    listNotificationsUseCase,
+    markNotificationAsReadUseCase,
     jwtService,
     rateLimiter,
     idempotencyStore
   );
 
-  // Start server
-  const port = config.PORT;
-  app.listen(port, () => {
-    console.log(`Chat API listening on port ${port}`);
+  // Create HTTP server
+  const httpServer = app.listen(config.PORT, () => {
+    console.log(`Chat API listening on port ${config.PORT}`);
     console.log(`Environment: ${config.NODE_ENV}`);
-    console.log(`Health check: http://localhost:${port}/health`);
+    console.log(`Health check: http://localhost:${config.PORT}/health`);
+  });
+
+  // Initialize Socket.IO
+  const io = new SocketIOServer(httpServer, {
+    cors: {
+      origin: config.CORS_ORIGIN || "*",
+      methods: ["GET", "POST"]
+    }
+  });
+
+  // Configure Redis adapter for Socket.IO
+  const redisClient = redisConnection.getClient();
+  io.adapter(createAdapter(redisClient));
+
+  // Initialize WebSocket middleware
+  io.use(socketIOMiddleware(jwtService));
+
+  // Initialize WebSocketGateway
+  const webSocketGateway = new WebSocketGateway(io);
+  webSocketGateway.subscribe(eventBus);
+
+  // Handle shutdown
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received. Shutting down gracefully...');
+    httpServer.close(() => {
+      console.log('HTTP server closed.');
+      redisClient.quit();
+      process.exit(0);
+    });
   });
 }
 

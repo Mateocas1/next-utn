@@ -76,9 +76,9 @@ describe('errorHandler middleware', () => {
   });
 
   it('should handle ZodError with 400 status and details', () => {
-    // Create a ZodError using a schema to get proper error structure
-    const { z } = require('zod');
-    const schema = z.object({
+  // Create a ZodError using a schema to get proper error structure
+  import { z } from 'zod';
+  const schema = z.object({
       email: z.string(),
       password: z.string().min(8),
     });

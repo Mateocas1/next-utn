@@ -9,9 +9,11 @@ import { idempotencyMiddleware } from './middlewares/idempotency';
 import { createAuthRoutes } from './routes/auth.routes';
 import { createChatRoutes } from './routes/chat.routes';
 import { createMessageRoutes } from './routes/message.routes';
+import { createNotificationRoutes } from './routes/notification.routes';
 import { AuthController } from './controllers/AuthController';
 import { ChatController } from './controllers/ChatController';
 import { MessageController } from './controllers/MessageController';
+import { NotificationController } from './controllers/NotificationController';
 import { RegisterUserUseCase } from '@application/use-cases/RegisterUserUseCase';
 import { LoginUserUseCase } from '@application/use-cases/LoginUserUseCase';
 import { CreateChatUseCase } from '@application/use-cases/CreateChatUseCase';
@@ -19,22 +21,28 @@ import { ListChatsUseCase } from '@application/use-cases/ListChatsUseCase';
 import { GetChatDetailsUseCase } from '@application/use-cases/GetChatDetailsUseCase';
 import { SendMessageUseCase } from '@application/use-cases/SendMessageUseCase';
 import { GetMessageHistoryUseCase } from '@application/use-cases/GetMessageHistoryUseCase';
+import { ListNotificationsUseCase } from '@application/use-cases/ListNotificationsUseCase';
+import { MarkNotificationAsReadUseCase } from '@application/use-cases/MarkNotificationAsReadUseCase';
+import { NotifyUserTypingUseCase } from '@application/use-cases/NotifyUserTypingUseCase';
 import { JWTService } from '@infrastructure/auth/JWTService';
 import { RateLimiter } from '@application/ports/RateLimiter';
 import { IdempotencyStore } from '@application/ports/IdempotencyStore';
 import { getEnv } from '@config/env';
 
 export function createApp(
-  registerUserUseCase: RegisterUserUseCase,
-  loginUserUseCase: LoginUserUseCase,
-  createChatUseCase: CreateChatUseCase,
-  listChatsUseCase: ListChatsUseCase,
-  getChatDetailsUseCase: GetChatDetailsUseCase,
-  sendMessageUseCase: SendMessageUseCase,
-  getMessageHistoryUseCase: GetMessageHistoryUseCase,
-  jwtService: JWTService,
-  rateLimiter: RateLimiter,
-  idempotencyStore: IdempotencyStore
+    registerUserUseCase: RegisterUserUseCase,
+    loginUserUseCase: LoginUserUseCase,
+    createChatUseCase: CreateChatUseCase,
+    listChatsUseCase: ListChatsUseCase,
+    getChatDetailsUseCase: GetChatDetailsUseCase,
+    sendMessageUseCase: SendMessageUseCase,
+    getMessageHistoryUseCase: GetMessageHistoryUseCase,
+    notifyUserTypingUseCase: NotifyUserTypingUseCase,
+    listNotificationsUseCase: ListNotificationsUseCase,
+    markNotificationAsReadUseCase: MarkNotificationAsReadUseCase,
+    jwtService: JWTService,
+    rateLimiter: RateLimiter,
+    idempotencyStore: IdempotencyStore
 ): Express {
   const app = express();
 
@@ -48,21 +56,29 @@ export function createApp(
   app.use(rateLimiterMiddleware(rateLimiter));
 
   // Create controllers
-  const authController = new AuthController(registerUserUseCase, loginUserUseCase);
-  const chatController = new ChatController(
-    createChatUseCase,
-    listChatsUseCase,
-    getChatDetailsUseCase
-  );
-  const messageController = new MessageController(
-    sendMessageUseCase,
-    getMessageHistoryUseCase
-  );
+    const authController = new AuthController(registerUserUseCase, loginUserUseCase);
+    const chatController = new ChatController(
+        createChatUseCase,
+        listChatsUseCase,
+        getChatDetailsUseCase
+    );
+    const messageController = new MessageController(
+        sendMessageUseCase,
+        getMessageHistoryUseCase,
+        notifyUserTypingUseCase
+    );
 
-// Routes
-app.use('/api/users', createAuthRoutes(authController));
-app.use('/api/chats', createChatRoutes(chatController, jwtService, idempotencyStore));
-app.use('/api/messages', createMessageRoutes(messageController, jwtService, idempotencyStore));
+    
+    const notificationController = new NotificationController(
+        listNotificationsUseCase,
+        markNotificationAsReadUseCase
+    );
+
+    // Routes
+    app.use('/api/users', createAuthRoutes(authController));
+    app.use('/api/chats', createChatRoutes(chatController, jwtService, idempotencyStore));
+    app.use('/api/messages', createMessageRoutes(messageController, jwtService, idempotencyStore));
+    app.use('/api/notifications', createNotificationRoutes(notificationController, jwtService));
 
   // Health check
   app.get('/health', (req, res) => {

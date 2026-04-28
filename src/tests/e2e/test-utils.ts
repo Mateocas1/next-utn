@@ -15,6 +15,11 @@ import { ListChatsUseCase } from '@application/use-cases/ListChatsUseCase';
 import { GetChatDetailsUseCase } from '@application/use-cases/GetChatDetailsUseCase';
 import { SendMessageUseCase } from '@application/use-cases/SendMessageUseCase';
 import { GetMessageHistoryUseCase } from '@application/use-cases/GetMessageHistoryUseCase';
+import { NotifyUserTypingUseCase } from '@application/use-cases/NotifyUserTypingUseCase';
+import { ListNotificationsUseCase } from '@application/use-cases/ListNotificationsUseCase';
+import { MarkNotificationAsReadUseCase } from '@application/use-cases/MarkNotificationAsReadUseCase';
+import { MongooseNotificationRepository } from '@infrastructure/database/repositories/MongooseNotificationRepository';
+import { NotificationModel } from '@infrastructure/database/models/NotificationModel';
 import { RedisRateLimiter } from '@infrastructure/redis/RedisRateLimiter';
 import { RedisIdempotencyStore } from '@infrastructure/redis/RedisIdempotencyStore';
 import { InMemoryEventBus } from '@infrastructure/events/InMemoryEventBus';
@@ -75,6 +80,7 @@ export async function setupTestApp(): Promise<TestApp> {
   const userRepository = new MongooseUserRepository();
   const chatRepository = new MongooseChatRepository();
   const messageRepository = new MongooseMessageRepository();
+  const notificationRepository = new MongooseNotificationRepository(NotificationModel);
 
   // Create event bus
   const eventBus = new InMemoryEventBus();
@@ -87,6 +93,9 @@ export async function setupTestApp(): Promise<TestApp> {
   const getChatDetailsUseCase = new GetChatDetailsUseCase(chatRepository);
   const sendMessageUseCase = new SendMessageUseCase(chatRepository, messageRepository, eventBus);
   const getMessageHistoryUseCase = new GetMessageHistoryUseCase(chatRepository, messageRepository);
+  const notifyUserTypingUseCase = new NotifyUserTypingUseCase(chatRepository, eventBus);
+  const listNotificationsUseCase = new ListNotificationsUseCase(notificationRepository);
+  const markNotificationAsReadUseCase = new MarkNotificationAsReadUseCase(notificationRepository);
 
   // Create Redis services
   const rateLimiter = new RedisRateLimiter(redisClient);
@@ -101,6 +110,9 @@ export async function setupTestApp(): Promise<TestApp> {
     getChatDetailsUseCase,
     sendMessageUseCase,
     getMessageHistoryUseCase,
+    notifyUserTypingUseCase,
+    listNotificationsUseCase,
+    markNotificationAsReadUseCase,
     jwtService,
     rateLimiter,
     idempotencyStore

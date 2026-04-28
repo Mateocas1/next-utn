@@ -20,5 +20,7 @@ export default defineConfig({
     'uuid',
     'ioredis',
     'node-redis',
+    'socket.io',
+    '@socket.io/redis-adapter',
   ],
 });

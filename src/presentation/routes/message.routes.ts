@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { MessageController } from '../controllers/MessageController';
 import { validate } from '../middlewares/validate';
 import { authMiddleware } from '../middlewares/auth';
@@ -26,13 +27,28 @@ export function createMessageRoutes(
     }
   );
 
-  router.get(
-    '/',
-    validate(getMessageHistorySchema, 'query'),
-    (req, res, next) => {
-      messageController.getHistory(req, res).catch(next);
-    }
-  );
+router.get(
+  '/',
+  validate(getMessageHistorySchema, 'query'),
+  (req, res, next) => {
+    messageController.getHistory(req, res).catch(next);
+  }
+);
+
+// Endpoint para notificar "usuario escribiendo..."
+router.post(
+  '/typing',
+  validate(
+    z.object({
+      chatId: z.string().uuid(),
+    isTyping: z.boolean(),
+    }),
+    'body'
+  ),
+  (req, res, next) => {
+    messageController.notifyTyping(req, res).catch(next);
+  }
+);
 
   return router;
 }

@@ -10,6 +10,7 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW: z.coerce.number().int().positive().default(60),
   IDEMPOTENCY_TTL: z.coerce.number().int().positive().default(86400),
+  CORS_ORIGIN: z.string().default('*'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

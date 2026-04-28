@@ -12,4 +12,11 @@ export interface EventBus {
    * @param event The domain event to publish
    */
   publish(event: DomainEvent): Promise<void>;
+
+  /**
+   * Subscribe to a domain event.
+   * @param eventType The type of the event
+   * @param handler The handler function
+   */
+  subscribe(eventType: string, handler: (event: any) => Promise<void>): void;
 }
