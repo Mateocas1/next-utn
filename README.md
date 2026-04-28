@@ -271,3 +271,18 @@ Las conexiones a MongoDB y Redis están envueltas en un Circuit Breaker.
 ### 7. Event-Driven Design (CQRS Light)
 - **Problema que resuelve**: Tareas pesadas bloqueando la respuesta HTTP al usuario.
 - **Mejora**: Al enviar un mensaje, la transacción principal solo guarda los datos. Luego, emite un evento de dominio (`MessageSentEvent`) en memoria. Esto permite que otros módulos (ej. un futuro servicio de Notificaciones Push o WebSockets) reaccionen al evento de forma asíncrona sin demorar la respuesta al cliente.
+
+---
+
+## 🔐 Password Requirements
+
+The backend enforces the following password rules for security:
+- Minimum **8 characters**.
+- At least **1 uppercase letter** (e.g., `A`).
+- At least **1 number** (e.g., `1`).
+- At least **1 special character** (e.g., `!`, `@`, `#`).
+
+**Frontend Recommendation**:
+- Display these requirements in the registration/login form.
+- Validate in real-time (e.g., with a checklist that activates as each requirement is met).
+- Show clear error messages when validation fails (e.g., "Password must contain at least one special character").

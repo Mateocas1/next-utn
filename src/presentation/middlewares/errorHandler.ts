@@ -19,11 +19,21 @@ export function errorHandler(
 
   // Handle Zod validation errors
   if (error instanceof ZodError) {
-    const details = error.issues.map((issue) => ({
-      field: issue.path.join('.'),
-      message: issue.message,
-      code: issue.code,
-    }));
+    const details = error.issues.map((issue) => {
+      // Custom message for password validation
+      if (issue.path.join('.') === 'password') {
+        return {
+          field: 'password',
+          message: 'Password must contain at least 8 characters, 1 uppercase letter, 1 number, and 1 special character',
+          code: issue.code,
+        };
+      }
+      return {
+        field: issue.path.join('.'),
+        message: issue.message,
+        code: issue.code,
+      };
+    });
 
     console.error(
       `[400] VALIDATION_ERROR: Validation failed`,
