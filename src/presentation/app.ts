@@ -95,6 +95,18 @@ export function createApp(
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
   });
 
+  app.get('/', (req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        name: 'Chat API',
+        status: 'running',
+        healthcheck: '/health'
+      },
+      message: 'Backend online'
+    });
+  });
+
   // Error handler (must be last)
   app.use(errorHandler);
 
