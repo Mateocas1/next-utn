@@ -45,4 +45,10 @@ export interface ChatRepository {
     version: number,
     session?: any
   ): Promise<Chat>;
+
+  removeParticipant(chatId: string, userId: string, session?: any): Promise<Chat>;
+
+  delete(id: string, session?: any): Promise<void>;
+
+  findByParticipantId(userId: string, session?: any): Promise<Chat[]>;
 }

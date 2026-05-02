@@ -9,6 +9,7 @@ const mockNotificationRepository: jest.Mocked<NotificationRepository> = {
     save: jest.fn(),
     findByUserId: jest.fn(),
     markAsRead: jest.fn(),
+    deleteByUserId: jest.fn(),
 };
 
 describe('ListNotificationsUseCase', () => {

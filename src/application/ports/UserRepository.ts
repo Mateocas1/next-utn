@@ -26,5 +26,9 @@ export interface UserRepository {
    * @param id The user ID
    * @returns The user if found, null otherwise
    */
-  findById(id: string): Promise<User | null>;
+  findById(id: string, session?: any): Promise<User | null>;
+
+  findAll(): Promise<User[]>;
+
+  delete(id: string, session?: any): Promise<void>;
 }

@@ -36,10 +36,10 @@ export class Chat {
     return this.props.version;
   }
 
-  static create(creatorId: string): Chat {
+  static create(creatorId: string, recipientId: string): Chat {
     return new Chat({
       id: randomUUID(),
-      participants: [creatorId],
+      participants: [creatorId, recipientId],
       createdAt: new Date(),
       updatedAt: new Date(),
       version: 0,

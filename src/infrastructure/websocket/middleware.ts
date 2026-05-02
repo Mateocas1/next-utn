@@ -1,5 +1,5 @@
 import { Socket } from 'socket.io';
-import { JWTService } from '../../auth/JWTService';
+import { JWTService } from '../auth/JWTService';
 import { ExtendedError } from 'socket.io/dist/namespace';
 
 /**
@@ -17,7 +17,7 @@ export function socketIOMiddleware(jwtService: JWTService) {
       }
 
       // Verificar token
-      const payload = jwtService.verify(token);
+      const payload = await jwtService.verify(token);
       if (!payload.userId) {
         throw new Error('Invalid token payload');
       }

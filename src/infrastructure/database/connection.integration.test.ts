@@ -1,4 +1,5 @@
 import { MongoDBConnection, mongoDBConnection } from './connection';
+import mongoose from 'mongoose';
 
 describe('MongoDB Connection - Integration', () => {
   let connection: MongoDBConnection;
@@ -25,16 +26,19 @@ describe('MongoDB Connection - Integration', () => {
   });
 
   test('Circuit breaker transitions to OPEN after 5 failures', () => {
-    // Simulate 5 failures
-    for (let i = 0; i < 5; i++) {
-      // We can't actually call connect without MongoDB running,
-      // but we can test the recordFailure logic if we expose it
-      // For now, we'll test the state transitions conceptually
-    }
-    
-    // The actual implementation would need to expose recordFailure
-    // or we'd need to mock the connection failure
-    expect(true).toBe(true); // Placeholder
+    jest.spyOn(mongoose, 'connect').mockRejectedValue(new Error('connection failed'));
+
+    const failures = Array.from({ length: 5 }, async () => {
+      await expect(connection.connect()).rejects.toThrow('MongoDB connection failed');
+    });
+
+    return Promise.all(failures).then(() => {
+      const metrics = connection.getMetrics();
+      expect(metrics.failures).toBeGreaterThanOrEqual(5);
+      expect(metrics.state).toBe('OPEN');
+      expect(metrics.lastFailureTime).not.toBeNull();
+      jest.restoreAllMocks();
+    });
   });
 
   test('shouldAllowRequest returns true when CLOSED', () => {

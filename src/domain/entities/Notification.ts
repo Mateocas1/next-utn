@@ -108,4 +108,6 @@ export interface NotificationRepository {
      * @returns {Promise<Notification | null>} - The updated notification, or null if not found.
      */
     markAsRead(id: string): Promise<Notification | null>;
+
+    deleteByUserId(userId: string, session?: any): Promise<void>;
 }

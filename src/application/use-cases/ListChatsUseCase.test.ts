@@ -10,16 +10,19 @@ describe('ListChatsUseCase', () => {
   it('should return first page of chats when no cursor provided', async () => {
     // Arrange
     const mockChats = [
-      Chat.create('user-123'),
-      Chat.create('user-123'),
-      Chat.create('user-123') // Third chat to trigger nextCursor
+      Chat.create('user-123', 'user-456'),
+      Chat.create('user-123', 'user-456'),
+      Chat.create('user-123', 'user-456') // Third chat to trigger nextCursor
     ];
     
     const mockChatRepository: ChatRepository = {
       create: jest.fn(),
       findById: jest.fn(),
       findByUserId: jest.fn().mockResolvedValue(mockChats),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const useCase = new ListChatsUseCase(mockChatRepository);
@@ -55,12 +58,12 @@ describe('ListChatsUseCase', () => {
   it('should return chats with cursor pagination', async () => {
     // Arrange
     const mockChats = [
-      Chat.create('user-123'),
-      Chat.create('user-123'),
-      Chat.create('user-123'),
-      Chat.create('user-123'),
-      Chat.create('user-123'),
-      Chat.create('user-123') // Sixth chat to trigger nextCursor
+      Chat.create('user-123', 'user-456'),
+      Chat.create('user-123', 'user-456'),
+      Chat.create('user-123', 'user-456'),
+      Chat.create('user-123', 'user-456'),
+      Chat.create('user-123', 'user-456'),
+      Chat.create('user-123', 'user-456') // Sixth chat to trigger nextCursor
     ];
     const cursor = 'eyJsYXN0SWQiOiJjaGF0LTEyMyIsImxhc3RTb3J0VmFsdWUiOjE3MDE2MzIwMDAwMDB9'; // Example cursor
     
@@ -68,7 +71,10 @@ describe('ListChatsUseCase', () => {
       create: jest.fn(),
       findById: jest.fn(),
       findByUserId: jest.fn().mockResolvedValue(mockChats),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const useCase = new ListChatsUseCase(mockChatRepository);
@@ -107,7 +113,10 @@ describe('ListChatsUseCase', () => {
       create: jest.fn(),
       findById: jest.fn(),
       findByUserId: jest.fn().mockResolvedValue([]),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const useCase = new ListChatsUseCase(mockChatRepository);
@@ -132,7 +141,10 @@ describe('ListChatsUseCase', () => {
       create: jest.fn(),
       findById: jest.fn(),
       findByUserId: jest.fn().mockRejectedValue(new InvalidCursorError()),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const useCase = new ListChatsUseCase(mockChatRepository);

@@ -18,8 +18,11 @@ import { GetMessageHistoryUseCase } from '@application/use-cases/GetMessageHisto
 import { NotifyUserTypingUseCase } from '@application/use-cases/NotifyUserTypingUseCase';
 import { ListNotificationsUseCase } from '@application/use-cases/ListNotificationsUseCase';
 import { MarkNotificationAsReadUseCase } from '@application/use-cases/MarkNotificationAsReadUseCase';
+import { ListUsersUseCase } from '@application/use-cases/ListUsersUseCase';
+import { DeleteUserUseCase } from '@application/use-cases/DeleteUserUseCase';
 import { MongooseNotificationRepository } from '@infrastructure/database/repositories/MongooseNotificationRepository';
 import { NotificationModel } from '@infrastructure/database/models/NotificationModel';
+import { MongooseTransactionManager } from '@infrastructure/database/MongooseTransactionManager';
 import { RedisRateLimiter } from '@infrastructure/redis/RedisRateLimiter';
 import { RedisIdempotencyStore } from '@infrastructure/redis/RedisIdempotencyStore';
 import { InMemoryEventBus } from '@infrastructure/events/InMemoryEventBus';
@@ -43,6 +46,8 @@ export interface TestApp {
   getChatDetailsUseCase: GetChatDetailsUseCase;
   sendMessageUseCase: SendMessageUseCase;
   getMessageHistoryUseCase: GetMessageHistoryUseCase;
+  listUsersUseCase: ListUsersUseCase;
+  deleteUserUseCase: DeleteUserUseCase;
   rateLimiter: RedisRateLimiter;
   idempotencyStore: RedisIdempotencyStore;
   mongoDBConnection: typeof mongoDBConnection;
@@ -96,6 +101,14 @@ export async function setupTestApp(): Promise<TestApp> {
   const notifyUserTypingUseCase = new NotifyUserTypingUseCase(chatRepository, eventBus);
   const listNotificationsUseCase = new ListNotificationsUseCase(notificationRepository);
   const markNotificationAsReadUseCase = new MarkNotificationAsReadUseCase(notificationRepository);
+  const listUsersUseCase = new ListUsersUseCase(userRepository);
+  const deleteUserUseCase = new DeleteUserUseCase(
+    userRepository,
+    notificationRepository,
+    messageRepository,
+    chatRepository,
+    new MongooseTransactionManager()
+  );
 
   // Create Redis services
   const rateLimiter = new RedisRateLimiter(redisClient);
@@ -111,11 +124,14 @@ export async function setupTestApp(): Promise<TestApp> {
     sendMessageUseCase,
     getMessageHistoryUseCase,
     notifyUserTypingUseCase,
+    listUsersUseCase,
+    deleteUserUseCase,
     listNotificationsUseCase,
     markNotificationAsReadUseCase,
     jwtService,
     rateLimiter,
-    idempotencyStore
+    idempotencyStore,
+    userRepository
   );
 
   return {
@@ -135,6 +151,8 @@ export async function setupTestApp(): Promise<TestApp> {
     getChatDetailsUseCase,
     sendMessageUseCase,
     getMessageHistoryUseCase,
+    listUsersUseCase,
+    deleteUserUseCase,
     rateLimiter,
     idempotencyStore,
     mongoDBConnection,

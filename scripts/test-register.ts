@@ -1,6 +1,6 @@
 // Configuración del request
 const RAILWAY_URL = 'https://next-utn-production.up.railway.app';
-const ENDPOINT = '/api/users/register';
+const ENDPOINT = '/users';
 const PAYLOAD = {
   email: 'test.user@example.com',
   password: 'SecurePassword123!',

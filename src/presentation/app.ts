@@ -24,10 +24,12 @@ import { GetMessageHistoryUseCase } from '@application/use-cases/GetMessageHisto
 import { ListNotificationsUseCase } from '@application/use-cases/ListNotificationsUseCase';
 import { MarkNotificationAsReadUseCase } from '@application/use-cases/MarkNotificationAsReadUseCase';
 import { NotifyUserTypingUseCase } from '@application/use-cases/NotifyUserTypingUseCase';
+import { ListUsersUseCase } from '@application/use-cases/ListUsersUseCase';
+import { DeleteUserUseCase } from '@application/use-cases/DeleteUserUseCase';
 import { JWTService } from '@infrastructure/auth/JWTService';
 import { RateLimiter } from '@application/ports/RateLimiter';
 import { IdempotencyStore } from '@application/ports/IdempotencyStore';
-import { getEnv } from '@config/env';
+import { UserRepository } from '@application/ports/UserRepository';
 
 export function createApp(
     registerUserUseCase: RegisterUserUseCase,
@@ -38,11 +40,14 @@ export function createApp(
     sendMessageUseCase: SendMessageUseCase,
     getMessageHistoryUseCase: GetMessageHistoryUseCase,
     notifyUserTypingUseCase: NotifyUserTypingUseCase,
+    listUsersUseCase: ListUsersUseCase,
+    deleteUserUseCase: DeleteUserUseCase,
     listNotificationsUseCase: ListNotificationsUseCase,
     markNotificationAsReadUseCase: MarkNotificationAsReadUseCase,
     jwtService: JWTService,
     rateLimiter: RateLimiter,
-    idempotencyStore: IdempotencyStore
+    idempotencyStore: IdempotencyStore,
+    userRepository: Pick<UserRepository, 'findById'>
 ): Express {
   const app = express();
 
@@ -56,7 +61,12 @@ export function createApp(
   app.use(rateLimiterMiddleware(rateLimiter));
 
   // Create controllers
-    const authController = new AuthController(registerUserUseCase, loginUserUseCase);
+    const authController = new AuthController(
+      registerUserUseCase,
+      loginUserUseCase,
+      listUsersUseCase,
+      deleteUserUseCase
+    );
     const chatController = new ChatController(
         createChatUseCase,
         listChatsUseCase,
@@ -75,10 +85,10 @@ export function createApp(
     );
 
     // Routes
-    app.use('/api/users', createAuthRoutes(authController));
-    app.use('/api/chats', createChatRoutes(chatController, jwtService, idempotencyStore));
-    app.use('/api/messages', createMessageRoutes(messageController, jwtService, idempotencyStore));
-    app.use('/api/notifications', createNotificationRoutes(notificationController, jwtService));
+    app.use('/users', createAuthRoutes(authController, jwtService, userRepository));
+    app.use('/chats', createChatRoutes(chatController, jwtService, idempotencyStore, userRepository));
+    app.use('/messages', createMessageRoutes(messageController, jwtService, idempotencyStore, userRepository));
+    app.use('/notifications', createNotificationRoutes(notificationController, jwtService, userRepository));
 
   // Health check
   app.get('/health', (req, res) => {

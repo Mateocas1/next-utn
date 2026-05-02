@@ -1,6 +1,6 @@
 "use strict";
 
-import { Notification, NotificationRepository } from "../../../../domain/entities/Notification";
+import { Notification, NotificationRepository } from "@domain/entities/Notification";
 import { Model } from "mongoose";
 import { NotificationDocument, NotificationModel } from "../models/NotificationModel";
 
@@ -64,6 +64,10 @@ export class MongooseNotificationRepository implements NotificationRepository {
             .findByIdAndUpdate(id, { read: true, readAt: new Date() }, { new: true })
             .exec();
         return doc ? this.toEntity(doc) : null;
+    }
+
+    async deleteByUserId(userId: string, session?: any): Promise<void> {
+        await this.model.deleteMany({ userId }, { session }).exec();
     }
 
     /**

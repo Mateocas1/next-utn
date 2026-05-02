@@ -21,7 +21,13 @@ describe('UserRepository port interface', () => {
       },
       findById: async (id: string): Promise<User | null> => {
         return null;
-      }
+      },
+      findAll: async (): Promise<User[]> => {
+        return [];
+      },
+      delete: async (_id: string): Promise<void> => {
+        return;
+      },
     };
     
     // The assertion is that TypeScript compiles this without error
@@ -35,7 +41,11 @@ describe('UserRepository port interface', () => {
     const mockRepository: UserRepository = {
       findByEmail: async () => null,
       create: async (user: User): Promise<User> => user,
-      findById: async () => null
+      findById: async () => null,
+      findAll: async () => [],
+      delete: async (_id: string) => {
+        return;
+      },
     };
     
     expect(typeof mockRepository.create).toBe('function');
@@ -46,7 +56,11 @@ describe('UserRepository port interface', () => {
     const mockRepository: UserRepository = {
       findByEmail: async () => null,
       create: async (user: User) => user,
-      findById: async (id: string): Promise<User | null> => null
+      findById: async (id: string): Promise<User | null> => null,
+      findAll: async (): Promise<User[]> => [],
+      delete: async (_id: string): Promise<void> => {
+        return;
+      },
     };
     
     expect(typeof mockRepository.findById).toBe('function');

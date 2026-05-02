@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { JWTService } from '@infrastructure/auth/JWTService';
+import { UserRepository } from '@application/ports/UserRepository';
 import { errorResponse } from '../utils/response';
 
 // Extend Express Request type to include userId
@@ -11,7 +12,10 @@ declare global {
   }
 }
 
-export function authMiddleware(jwtService: JWTService) {
+export function authMiddleware(
+  jwtService: JWTService,
+  userRepository: Pick<UserRepository, 'findById'>
+) {
   return (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization || req.headers.Authorization;
 
@@ -33,7 +37,16 @@ export function authMiddleware(jwtService: JWTService) {
     const token = parts[1];
     
     jwtService.verify(token)
-      .then(payload => {
+      .then(async payload => {
+        const user = await userRepository.findById(payload.userId);
+
+        if (!user) {
+          res.status(401).json(
+            errorResponse('Invalid token', 'INVALID_TOKEN')
+          );
+          return;
+        }
+
         req.userId = payload.userId;
         next();
       })

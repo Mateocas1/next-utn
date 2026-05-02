@@ -1,5 +1,5 @@
-import { Message } from '@domain/entities/Message';
 import { NotFoundError, ChatAccessDeniedError } from '@domain/errors/DomainError';
+import { MessageDTO } from '../dtos/MessageDTO';
 import { ChatRepository } from '../ports/ChatRepository';
 import { MessageRepository } from '../ports/MessageRepository';
 import { encodeCursor } from '../utils/cursor';
@@ -12,7 +12,7 @@ export interface GetMessageHistoryInput {
 }
 
 export interface GetMessageHistoryOutput {
-  data: Message[];
+  data: MessageDTO[];
   meta: {
     nextCursor: string | null;
     limit: number;
@@ -54,17 +54,25 @@ export class GetMessageHistoryUseCase {
 
     // Determine if there's a next page
     const hasNextPage = messages.length > limit;
-    const data = hasNextPage ? messages.slice(0, limit) : messages;
+    const messagesPage = hasNextPage ? messages.slice(0, limit) : messages;
 
     // Calculate next cursor if there's a next page
     let nextCursor: string | null = null;
-    if (hasNextPage && data.length > 0) {
-      const lastMessage = data[data.length - 1];
+    if (hasNextPage && messagesPage.length > 0) {
+      const lastMessage = messagesPage[messagesPage.length - 1];
       nextCursor = encodeCursor({
         lastId: lastMessage.id,
         lastSortValue: lastMessage.createdAt.getTime()
       });
     }
+
+    const data = messagesPage.map((message) => ({
+      id: message.id,
+      chatId: message.chatId,
+      senderId: message.senderId,
+      content: message.content,
+      createdAt: message.createdAt.toISOString()
+    }));
 
     return {
       data,

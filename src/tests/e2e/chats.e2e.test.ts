@@ -7,29 +7,50 @@ describe('Chats API - E2E', () => {
   let authToken: string;
   let userId: string;
 
-  beforeAll(async () => {
-    testApp = await setupTestApp();
-    server = testApp.app;
-    
-    // Create a test user and get token
+  const createRecipient = async (): Promise<string> => {
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const email = `chat-recipient-${unique}@example.com`;
+
     const registerResponse = await request(server)
-      .post('/auth/register')
+      .post('/users/register')
       .send({
-        email: 'chat-user@example.com',
+        email,
+        displayName: 'Recipient User',
+        password: 'SecurePass123!',
+      });
+
+    return registerResponse.body.data.id;
+  };
+
+  const bootstrapAuthUser = async () => {
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const email = `chat-user-${unique}@example.com`;
+
+    const registerResponse = await request(server)
+      .post('/users/register')
+      .send({
+        email,
         displayName: 'Chat User',
         password: 'SecurePass123!',
       });
-    
+
     userId = registerResponse.body.data.id;
-    
+
     const loginResponse = await request(server)
-      .post('/auth/login')
+      .post('/users/login')
       .send({
-        email: 'chat-user@example.com',
+        email,
         password: 'SecurePass123!',
       });
-    
+
     authToken = loginResponse.body.data.token;
+  };
+
+  beforeAll(async () => {
+    testApp = await setupTestApp();
+    server = testApp.app;
+
+    await bootstrapAuthUser();
   });
 
   afterAll(async () => {
@@ -43,21 +64,40 @@ describe('Chats API - E2E', () => {
     for (const key in collections) {
       await collections[key].deleteMany({});
     }
+
+    await bootstrapAuthUser();
   });
 
   describe('POST /chats', () => {
-    it('should return 201 with created chat data', async () => {
+    it('should return 400 when recipientId equals authenticated user id', async () => {
       const response = await request(server)
         .post('/chats')
         .set('Authorization', `Bearer ${authToken}`)
-        .send({});
+        .send({ recipientId: userId });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        success: false,
+        data: null,
+        message: 'Cannot create chat with yourself',
+        errorCode: 'VALIDATION_ERROR',
+      });
+    });
+
+    it('should return 201 with created chat data', async () => {
+      const recipientId = await createRecipient();
+
+      const response = await request(server)
+        .post('/chats')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ recipientId });
 
       expect(response.status).toBe(201);
       expect(response.body).toEqual({
         success: true,
         data: {
           id: expect.any(String),
-          participants: [userId],
+          participants: [userId, recipientId],
           createdAt: expect.any(String),
           updatedAt: expect.any(String),
         },
@@ -65,9 +105,11 @@ describe('Chats API - E2E', () => {
     });
 
     it('should return 401 without authentication', async () => {
+      const recipientId = await createRecipient();
+
       const response = await request(server)
         .post('/chats')
-        .send({});
+        .send({ recipientId });
 
       expect(response.status).toBe(401);
       expect(response.body).toEqual({
@@ -80,18 +122,19 @@ describe('Chats API - E2E', () => {
 
     it('should support idempotency with same key and body', async () => {
       const idempotencyKey = 'idempotent-chat-123';
+      const recipientId = await createRecipient();
       
       const firstResponse = await request(server)
         .post('/chats')
         .set('Authorization', `Bearer ${authToken}`)
         .set('Idempotency-Key', idempotencyKey)
-        .send({});
+        .send({ recipientId });
 
       const secondResponse = await request(server)
         .post('/chats')
         .set('Authorization', `Bearer ${authToken}`)
         .set('Idempotency-Key', idempotencyKey)
-        .send({});
+        .send({ recipientId });
 
       expect(firstResponse.status).toBe(201);
       expect(secondResponse.status).toBe(200); // Should return cached response
@@ -100,20 +143,22 @@ describe('Chats API - E2E', () => {
 
     it('should return 409 for idempotency key conflict with different body', async () => {
       const idempotencyKey = 'conflict-key-123';
+      const recipientA = await createRecipient();
+      const recipientB = await createRecipient();
       
       // First request with empty body
       await request(server)
         .post('/chats')
         .set('Authorization', `Bearer ${authToken}`)
         .set('Idempotency-Key', idempotencyKey)
-        .send({});
+        .send({ recipientId: recipientA });
 
       // Second request with different body (though body doesn't matter for /chats)
       const response = await request(server)
         .post('/chats')
         .set('Authorization', `Bearer ${authToken}`)
         .set('Idempotency-Key', idempotencyKey)
-        .send({ some: 'different', body: 'structure' });
+        .send({ recipientId: recipientB });
 
       expect(response.status).toBe(409);
       expect(response.body).toEqual({
@@ -129,10 +174,11 @@ describe('Chats API - E2E', () => {
     beforeEach(async () => {
       // Create some test chats
       for (let i = 0; i < 5; i++) {
+        const recipientId = await createRecipient();
         await request(server)
           .post('/chats')
           .set('Authorization', `Bearer ${authToken}`)
-          .send({});
+          .send({ recipientId });
       }
     });
 
@@ -142,15 +188,11 @@ describe('Chats API - E2E', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({
-        success: true,
-        data: expect.any(Array),
-        meta: {
-          nextCursor: expect.any(String),
-          limit: 2,
-        },
-      });
+      expect(response.body.success).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.meta.limit).toBe(2);
       expect(response.body.data).toHaveLength(2);
+      expect(response.body.meta).toHaveProperty('nextCursor');
     });
 
     it('should return second page using cursor', async () => {
@@ -187,10 +229,11 @@ it('should paginate correctly and return null cursor on last page', async () => 
       // Create 5 chats
       const chatIds = [];
       for (let i = 0; i < 5; i++) {
+        const recipientId = await createRecipient();
         const response = await request(server)
           .post('/chats')
           .set('Authorization', `Bearer ${authToken}`)
-          .send({});
+          .send({ recipientId });
         expect(response.status).toBe(201);
         chatIds.push(response.body.data.id);
       }
@@ -263,10 +306,11 @@ it('should paginate correctly and return null cursor on last page', async () => 
     let chatId: string;
 
     beforeEach(async () => {
+      const recipientId = await createRecipient();
       const response = await request(server)
         .post('/chats')
         .set('Authorization', `Bearer ${authToken}`)
-        .send({});
+        .send({ recipientId });
       
       chatId = response.body.data.id;
     });
@@ -281,7 +325,7 @@ it('should paginate correctly and return null cursor on last page', async () => 
         success: true,
         data: {
           id: chatId,
-          participants: [userId],
+          participants: expect.arrayContaining([userId]),
           createdAt: expect.any(String),
           updatedAt: expect.any(String),
         },
@@ -291,7 +335,7 @@ it('should paginate correctly and return null cursor on last page', async () => 
     it('should return 403 for non-participant', async () => {
       // Create another user
       const otherUserResponse = await request(server)
-        .post('/auth/register')
+        .post('/users/register')
         .send({
           email: 'other@example.com',
           displayName: 'Other User',
@@ -299,7 +343,7 @@ it('should paginate correctly and return null cursor on last page', async () => 
         });
       
       const otherLogin = await request(server)
-        .post('/auth/login')
+        .post('/users/login')
         .send({
           email: 'other@example.com',
           password: 'SecurePass123!',

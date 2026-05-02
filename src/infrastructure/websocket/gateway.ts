@@ -1,8 +1,8 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { EventBus } from '../../application/ports/EventBus';
-import { MessageSentEvent } from '../../../domain/events/MessageSentEvent';
-import { UserTypingEvent } from '../../../domain/events/UserTypingEvent';
-import { NotificationSentEvent } from '../../../domain/events/NotificationSentEvent';
+import { MessageSentEvent } from '../../domain/events/MessageSentEvent';
+import { UserTypingEvent } from '../../domain/events/UserTypingEvent';
+import { NotificationSentEvent } from '../../domain/events/NotificationSentEvent';
 
 /**
  * Gateway para manejar eventos de WebSocket.
@@ -24,7 +24,7 @@ export class WebSocketGateway {
    * Manejar evento `MessageSentEvent`.
    * Emitir mensaje a la room del chat.
    */
-  private handleMessageSent(event: MessageSentEvent): void {
+  private async handleMessageSent(event: MessageSentEvent): Promise<void> {
     const roomId = `chat:${event.payload.chatId}`;
     this.io.to(roomId).emit('message', {
       id: event.payload.messageId,
@@ -39,7 +39,7 @@ export class WebSocketGateway {
    * Manejar evento `UserTypingEvent`.
    * Emitir evento "typing" a la room del chat.
    */
-  private handleUserTyping(event: UserTypingEvent): void {
+  private async handleUserTyping(event: UserTypingEvent): Promise<void> {
     const roomId = `chat:${event.payload.chatId}`;
     this.io.to(roomId).emit('typing', {
       userId: event.payload.userId,
@@ -51,7 +51,7 @@ export class WebSocketGateway {
    * Manejar evento `NotificationSentEvent`.
    * Emitir notificación al usuario destinatario.
    */
-  private handleNotificationSent(event: NotificationSentEvent): void {
+  private async handleNotificationSent(event: NotificationSentEvent): Promise<void> {
     const userId = event.notification.userId;
     this.io.to(`user:${userId}`).emit('notification', {
       id: event.notification.id,

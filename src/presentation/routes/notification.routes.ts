@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { NotificationController } from '../controllers/NotificationController';
 import { authMiddleware } from '../middlewares/auth';
 import { JWTService } from '@infrastructure/auth/JWTService';
+import { UserRepository } from '@application/ports/UserRepository';
 
 /***
  * Creates and configures notification routes.
@@ -14,12 +15,13 @@ import { JWTService } from '@infrastructure/auth/JWTService';
  */
 export function createNotificationRoutes(
     notificationController: NotificationController,
-    jwtService: JWTService
+    jwtService: JWTService,
+    userRepository: Pick<UserRepository, 'findById'>
 ): Router {
     const router = Router();
 
     // All notification routes require authentication
-    router.use(authMiddleware(jwtService));
+    router.use(authMiddleware(jwtService, userRepository));
 
     // List notifications for the authenticated user
     router.get('/', (req, res, next) => {

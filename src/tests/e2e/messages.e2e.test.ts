@@ -8,37 +8,58 @@ describe('Messages API - E2E', () => {
   let userId: string;
   let chatId: string;
 
-  beforeAll(async () => {
-    testApp = await setupTestApp();
-    server = testApp.app;
-    
-    // Create a test user and get token
+  const createRecipient = async (): Promise<string> => {
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const email = `message-recipient-${unique}@example.com`;
+
     const registerResponse = await request(server)
-      .post('/auth/register')
+      .post('/users/register')
       .send({
-        email: 'message-user@example.com',
+        email,
+        displayName: 'Message Recipient',
+        password: 'SecurePass123!',
+      });
+
+    return registerResponse.body.data.id;
+  };
+
+  const bootstrapAuthAndChat = async () => {
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const email = `message-user-${unique}@example.com`;
+
+    const registerResponse = await request(server)
+      .post('/users/register')
+      .send({
+        email,
         displayName: 'Message User',
         password: 'SecurePass123!',
       });
-    
+
     userId = registerResponse.body.data.id;
-    
+
     const loginResponse = await request(server)
-      .post('/auth/login')
+      .post('/users/login')
       .send({
-        email: 'message-user@example.com',
+        email,
         password: 'SecurePass123!',
       });
-    
+
     authToken = loginResponse.body.data.token;
 
-    // Create a chat for testing
+    const recipientId = await createRecipient();
     const chatResponse = await request(server)
       .post('/chats')
       .set('Authorization', `Bearer ${authToken}`)
-      .send({});
-    
+      .send({ recipientId });
+
     chatId = chatResponse.body.data.id;
+  };
+
+  beforeAll(async () => {
+    testApp = await setupTestApp();
+    server = testApp.app;
+
+    await bootstrapAuthAndChat();
   });
 
   afterAll(async () => {
@@ -53,13 +74,7 @@ describe('Messages API - E2E', () => {
       await collections[key].deleteMany({});
     }
 
-    // Recreate chat after clearing
-    const chatResponse = await request(server)
-      .post('/chats')
-      .set('Authorization', `Bearer ${authToken}`)
-      .send({});
-    
-    chatId = chatResponse.body.data.id;
+    await bootstrapAuthAndChat();
   });
 
   describe('POST /messages', () => {
@@ -98,7 +113,7 @@ describe('Messages API - E2E', () => {
     it('should return 403 when user is not a chat participant', async () => {
       // Create another user
       const otherRegisterResponse = await request(server)
-        .post('/auth/register')
+        .post('/users/register')
         .send({
           email: 'other-message-user@example.com',
           displayName: 'Other Message User',
@@ -106,7 +121,7 @@ describe('Messages API - E2E', () => {
         });
       
       const otherLoginResponse = await request(server)
-        .post('/auth/login')
+        .post('/users/login')
         .send({
           email: 'other-message-user@example.com',
           password: 'SecurePass123!',
@@ -204,7 +219,7 @@ describe('Messages API - E2E', () => {
       
       expect(response.status).toBe(200);
       expect(response.body.data).toHaveLength(5);
-      expect(response.body.data[0].props).toMatchObject({
+      expect(response.body.data[0]).toMatchObject({
         id: expect.any(String),
         chatId,
         senderId: userId,
@@ -212,8 +227,8 @@ describe('Messages API - E2E', () => {
         createdAt: expect.any(String),
       });
       // Messages should be sorted newest first
-      expect(response.body.data[0].props.content).toBe('Message 5');
-      expect(response.body.data[4].props.content).toBe('Message 1');
+      expect(response.body.data[0].content).toBe('Message 5');
+      expect(response.body.data[4].content).toBe('Message 1');
     });
 
     it('should paginate correctly with limit', async () => {
@@ -302,7 +317,7 @@ describe('Messages API - E2E', () => {
     it('should return 403 when user is not a chat participant', async () => {
       // Create another user
       const otherRegisterResponse = await request(server)
-        .post('/auth/register')
+        .post('/users/register')
         .send({
           email: 'other-message-user2@example.com',
           displayName: 'Other Message User 2',
@@ -310,7 +325,7 @@ describe('Messages API - E2E', () => {
         });
       
       const otherLoginResponse = await request(server)
-        .post('/auth/login')
+        .post('/users/login')
         .send({
           email: 'other-message-user2@example.com',
           password: 'SecurePass123!',
@@ -325,6 +340,33 @@ describe('Messages API - E2E', () => {
       
       expect(response.status).toBe(403);
       expect(response.body.errorCode).toBe('CHAT_ACCESS_DENIED');
+    });
+  });
+
+  describe('POST /messages/typing', () => {
+    it('should return 400 when isTyping is missing', async () => {
+      const response = await request(server)
+        .post('/messages/typing')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          chatId,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.errorCode).toBe('VALIDATION_ERROR');
+    });
+
+    it('should return 400 when isTyping is not boolean', async () => {
+      const response = await request(server)
+        .post('/messages/typing')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          chatId,
+          isTyping: 'true',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.errorCode).toBe('VALIDATION_ERROR');
     });
   });
 });

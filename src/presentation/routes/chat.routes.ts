@@ -5,17 +5,19 @@ import { authMiddleware } from '../middlewares/auth';
 import { idempotencyMiddleware } from '../middlewares/idempotency';
 import { JWTService } from '@infrastructure/auth/JWTService';
 import { IdempotencyStore } from '@application/ports/IdempotencyStore';
+import { UserRepository } from '@application/ports/UserRepository';
 import { createChatSchema, chatIdSchema, listChatsSchema } from '../schemas/chat.schemas';
 
 export function createChatRoutes(
   chatController: ChatController,
   jwtService: JWTService,
-  idempotencyStore: IdempotencyStore
+  idempotencyStore: IdempotencyStore,
+  userRepository: Pick<UserRepository, 'findById'>
 ): Router {
   const router = Router();
 
   // All chat routes require authentication
-  router.use(authMiddleware(jwtService));
+  router.use(authMiddleware(jwtService, userRepository));
 
   router.post(
     '/',

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { getEnv } from './config/env';
 import { createApp } from './presentation/app';
 import { mongoDBConnection } from './infrastructure/database/connection';
@@ -19,15 +20,18 @@ import { ListNotificationsUseCase } from './application/use-cases/ListNotificati
 import { MarkNotificationAsReadUseCase } from './application/use-cases/MarkNotificationAsReadUseCase';
 import { NotifyUserTypingUseCase } from './application/use-cases/NotifyUserTypingUseCase';
 import { SendNotificationUseCase } from './application/use-cases/SendNotificationUseCase';
+import { ListUsersUseCase } from './application/use-cases/ListUsersUseCase';
+import { DeleteUserUseCase } from './application/use-cases/DeleteUserUseCase';
 import { registerEventHandlers } from './application/event-handlers/registerEventHandlers';
 import { NotificationModel } from './infrastructure/database/models/NotificationModel';
 import { InMemoryEventBus } from './infrastructure/events/InMemoryEventBus';
 import { RedisRateLimiter } from './infrastructure/redis/RedisRateLimiter';
 import { RedisIdempotencyStore } from './infrastructure/redis/RedisIdempotencyStore';
 import { Server as SocketIOServer } from 'socket.io';
-import { createAdapter } from '@socket.io/redis-adapter';
 import { WebSocketGateway } from './infrastructure/websocket/gateway';
 import { socketIOMiddleware } from './infrastructure/websocket/middleware';
+import { MongooseTransactionManager } from './infrastructure/database/MongooseTransactionManager';
+import { setupSocketRedisAdapter } from './infrastructure/websocket/setupRedisAdapter';
 
 async function bootstrap() {
   console.log('Starting Chat API...');
@@ -86,6 +90,15 @@ async function bootstrap() {
   // Create notification sender and register event handlers
   const sendNotificationUseCase = new SendNotificationUseCase(notificationRepository, eventBus);
   registerEventHandlers(eventBus, notificationRepository);
+  const transactionManager = new MongooseTransactionManager();
+  const listUsersUseCase = new ListUsersUseCase(userRepository);
+  const deleteUserUseCase = new DeleteUserUseCase(
+    userRepository,
+    notificationRepository,
+    messageRepository,
+    chatRepository,
+    transactionManager
+  );
 
   // Create Express app
   const app = createApp(
@@ -97,11 +110,14 @@ async function bootstrap() {
     sendMessageUseCase,
     getMessageHistoryUseCase,
     notifyUserTypingUseCase,
+    listUsersUseCase,
+    deleteUserUseCase,
     listNotificationsUseCase,
     markNotificationAsReadUseCase,
     jwtService,
     rateLimiter,
-    idempotencyStore
+    idempotencyStore,
+    userRepository
   );
 
   // Create HTTP server
@@ -121,7 +137,11 @@ async function bootstrap() {
 
   // Configure Redis adapter for Socket.IO
   const redisClient = redisConnection.getClient();
-  io.adapter(createAdapter(redisClient));
+  const adapterSetup = await setupSocketRedisAdapter({
+    io,
+    redisClient,
+    logger: console,
+  });
 
   // Initialize WebSocket middleware
   io.use(socketIOMiddleware(jwtService));
@@ -129,12 +149,18 @@ async function bootstrap() {
   // Initialize WebSocketGateway
   const webSocketGateway = new WebSocketGateway(io);
   webSocketGateway.subscribe(eventBus);
+  io.on('connection', (socket) => {
+    webSocketGateway.handleConnection(socket);
+  });
 
   // Handle shutdown
   process.on('SIGTERM', () => {
     console.log('SIGTERM received. Shutting down gracefully...');
     httpServer.close(() => {
       console.log('HTTP server closed.');
+      if (adapterSetup.mode === 'redis') {
+        adapterSetup.subscriberClient.quit();
+      }
       redisClient.quit();
       process.exit(0);
     });

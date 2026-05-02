@@ -68,4 +68,30 @@ export class MongooseMessageRepository implements MessageRepository {
       throw error;
     }
   }
+
+  async deleteByUserId(userId: string, session?: any): Promise<void> {
+    await MessageModel.deleteMany({ senderId: userId }, { session });
+  }
+
+  async deleteByChatId(chatId: string, session?: any): Promise<void> {
+    await MessageModel.deleteMany({ chatId }, { session });
+  }
+
+  async findLatestByChatId(chatId: string, session?: any): Promise<Message | null> {
+    const messageDoc = await MessageModel.findOne({ chatId }, {}, { session })
+      .sort({ createdAt: -1, id: -1 })
+      .exec();
+
+    if (!messageDoc) {
+      return null;
+    }
+
+    return Message.reconstruct({
+      id: messageDoc.id,
+      chatId: messageDoc.chatId,
+      senderId: messageDoc.senderId,
+      content: messageDoc.content,
+      createdAt: messageDoc.createdAt,
+    });
+  }
 }

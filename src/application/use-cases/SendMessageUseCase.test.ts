@@ -12,7 +12,7 @@ describe('SendMessageUseCase', () => {
   
   it('should send message successfully within transaction', async () => {
     // Arrange
-    const chat = Chat.create('user-123');
+    const chat = Chat.create('user-123', 'user-456');
     const mockMessage = Message.create(chat.id, 'user-123', 'Hello world!');
     
     const mockChatRepository: ChatRepository = {
@@ -23,16 +23,23 @@ describe('SendMessageUseCase', () => {
         ...chat,
         latestMessagePreview: 'Hello world!',
         version: chat.version + 1
-      })
+      }),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const mockMessageRepository: MessageRepository = {
       create: jest.fn().mockImplementation(async (message) => message),
-      findByChatId: jest.fn()
+      findByChatId: jest.fn(),
+      deleteByUserId: jest.fn(),
+      deleteByChatId: jest.fn(),
+      findLatestByChatId: jest.fn()
     };
     
     const mockEventBus: EventBus = {
-      publish: jest.fn().mockResolvedValue(undefined)
+      publish: jest.fn().mockResolvedValue(undefined),
+      subscribe: jest.fn()
     };
     
     const useCase = new SendMessageUseCase(
@@ -91,16 +98,23 @@ describe('SendMessageUseCase', () => {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(null),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const mockMessageRepository: MessageRepository = {
       create: jest.fn(),
-      findByChatId: jest.fn()
+      findByChatId: jest.fn(),
+      deleteByUserId: jest.fn(),
+      deleteByChatId: jest.fn(),
+      findLatestByChatId: jest.fn()
     };
     
     const mockEventBus: EventBus = {
-      publish: jest.fn()
+      publish: jest.fn(),
+      subscribe: jest.fn()
     };
     
     const useCase = new SendMessageUseCase(
@@ -126,22 +140,29 @@ describe('SendMessageUseCase', () => {
   
   it('should throw ForbiddenError when user is not participant', async () => {
     // Arrange
-    const chat = Chat.create('different-user'); // Created by different user
+    const chat = Chat.create('different-user', 'chat-participant-2'); // Created by different user
     
     const mockChatRepository: ChatRepository = {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(chat),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const mockMessageRepository: MessageRepository = {
       create: jest.fn(),
-      findByChatId: jest.fn()
+      findByChatId: jest.fn(),
+      deleteByUserId: jest.fn(),
+      deleteByChatId: jest.fn(),
+      findLatestByChatId: jest.fn()
     };
     
     const mockEventBus: EventBus = {
-      publish: jest.fn()
+      publish: jest.fn(),
+      subscribe: jest.fn()
     };
     
     const useCase = new SendMessageUseCase(
@@ -167,22 +188,29 @@ describe('SendMessageUseCase', () => {
   
   it('should throw ConcurrentModificationError on version conflict', async () => {
     // Arrange
-    const chat = Chat.create('user-123');
+    const chat = Chat.create('user-123', 'user-456');
     
     const mockChatRepository: ChatRepository = {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(chat),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn().mockRejectedValue(new ConcurrentModificationError())
+      updateLatestMessage: jest.fn().mockRejectedValue(new ConcurrentModificationError()),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const mockMessageRepository: MessageRepository = {
       create: jest.fn().mockResolvedValue(Message.create(chat.id, 'user-123', 'Hello!')),
-      findByChatId: jest.fn()
+      findByChatId: jest.fn(),
+      deleteByUserId: jest.fn(),
+      deleteByChatId: jest.fn(),
+      findLatestByChatId: jest.fn()
     };
     
     const mockEventBus: EventBus = {
-      publish: jest.fn()
+      publish: jest.fn(),
+      subscribe: jest.fn()
     };
     
     const useCase = new SendMessageUseCase(

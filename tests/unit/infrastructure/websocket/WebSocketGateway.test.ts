@@ -1,139 +1,108 @@
-"use strict";
-
-import { Server as SocketIOServer, Socket } from 'socket.io';
-import { createServer } from 'http';
+import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { WebSocketGateway } from '../../../../src/infrastructure/websocket/gateway';
-import { EventBus } from '../../../../src/application/ports/EventBus';
 import { MessageSentEvent } from '../../../../src/domain/events/MessageSentEvent';
 import { UserTypingEvent } from '../../../../src/domain/events/UserTypingEvent';
-
-// Mock EventBus
-class MockEventBus implements EventBus {
-  private subscribers: Record<string, Function[]> = {};
-
-  subscribe(eventName: string, callback: Function): void {
-    if (!this.subscribers[eventName]) {
-      this.subscribers[eventName] = [];
-    }
-    this.subscribers[eventName].push(callback);
-  }
-
-  async publish(event: any): Promise<void> {
-    const eventName = event.constructor.name;
-    if (this.subscribers[eventName]) {
-      for (const callback of this.subscribers[eventName]) {
-        await callback(event);
-      }
-    }
-  }
-}
+import { NotificationSentEvent } from '../../../../src/domain/events/NotificationSentEvent';
+import { Notification } from '../../../../src/domain/entities/Notification';
 
 describe('WebSocketGateway', () => {
-  let io: SocketIOServer;
-  let gateway: WebSocketGateway;
-  let mockEventBus: MockEventBus;
-  let httpServer: any;
-  let socket: Socket;
+  const createSocket = (): Socket => {
+    return {
+      data: { userId: 'user-1' },
+      join: jest.fn(),
+      leave: jest.fn(),
+      on: jest.fn(),
+    } as unknown as Socket;
+  };
 
-  beforeAll((done) => {
-    httpServer = createServer();
-    io = new SocketIOServer(httpServer);
-    mockEventBus = new MockEventBus();
-    gateway = new WebSocketGateway(io);
-    gateway.subscribe(mockEventBus);
+  it('wires handleConnection and room contracts', () => {
+    const socket = createSocket();
+    const io = {
+      to: jest.fn(),
+    } as unknown as SocketIOServer;
+    const gateway = new WebSocketGateway(io);
 
-    httpServer.listen(() => {
-      const port = (httpServer.address() as any).port;
-      socket = new Socket(`http://localhost:${port}`) as any;
-      (socket as any).data = { userId: 'test-user-id' };
-      done();
-    });
+    gateway.handleConnection(socket);
+
+    expect(socket.join).toHaveBeenCalledWith('user:user-1');
+    expect(socket.on).toHaveBeenCalledWith('joinChat', expect.any(Function));
+    expect(socket.on).toHaveBeenCalledWith('leaveChat', expect.any(Function));
+    expect(socket.on).toHaveBeenCalledWith('disconnect', expect.any(Function));
+
+    const joinHandler = (socket.on as jest.Mock).mock.calls.find(
+      (entry: [string, (...args: unknown[]) => void]) => entry[0] === 'joinChat'
+    )?.[1];
+    const leaveHandler = (socket.on as jest.Mock).mock.calls.find(
+      (entry: [string, (...args: unknown[]) => void]) => entry[0] === 'leaveChat'
+    )?.[1];
+
+    joinHandler?.('chat-123');
+    leaveHandler?.('chat-123');
+
+    expect(socket.join).toHaveBeenCalledWith('chat:chat-123');
+    expect(socket.leave).toHaveBeenCalledWith('chat:chat-123');
   });
 
-  afterAll(() => {
-    io.close();
-    httpServer.close();
-  });
+  it('subscribes event handlers and emits to route contracts', async () => {
+    const toEmit = jest.fn();
+    const io = {
+      to: jest.fn().mockReturnValue({ emit: toEmit }),
+    } as unknown as SocketIOServer;
+    const gateway = new WebSocketGateway(io);
 
-  it('should handle connection and join user room', (done) => {
-    io.on('connection', (socket) => {
-      gateway.handleConnection(socket);
-      expect(socket.rooms.has(`user:test-user-id`)).toBe(true);
-      done();
+    const listeners = new Map<string, (event: any) => Promise<void>>();
+    const eventBus = {
+      subscribe: jest.fn((eventName: string, listener: (event: any) => Promise<void>) => {
+        listeners.set(eventName, listener);
+      }),
+    };
+
+    gateway.subscribe(eventBus as never);
+
+    const messageEvent = new MessageSentEvent({
+      messageId: 'm-1',
+      chatId: 'chat-1',
+      senderId: 'user-1',
+      content: 'hola',
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
     });
-    socket.connect();
-  });
+    await listeners.get(MessageSentEvent.name)?.(messageEvent);
 
-  it('should handle joinChat event', (done) => {
-    io.on('connection', (socket) => {
-      gateway.handleConnection(socket);
-      socket.on('joinChat', (chatId: string) => {
-        expect(socket.rooms.has(`chat:${chatId}`)).toBe(true);
-        done();
-      });
-      socket.emit('joinChat', 'test-chat-id');
-    });
-    socket.connect();
-  });
-
-  it('should handle leaveChat event', (done) => {
-    io.on('connection', (socket) => {
-      gateway.handleConnection(socket);
-      socket.on('joinChat', (chatId: string) => {
-        socket.join(`chat:${chatId}`);
-        socket.emit('leaveChat', chatId);
-      });
-      socket.on('leaveChat', (chatId: string) => {
-        setTimeout(() => {
-          expect(socket.rooms.has(`chat:${chatId}`)).toBe(false);
-          done();
-        }, 10);
-      });
-      socket.emit('joinChat', 'test-chat-id');
-    });
-    socket.connect();
-  });
-
-  it('should emit message event on MessageSentEvent', (done) => {
-    const testEvent = new MessageSentEvent({
-      messageId: 'test-message-id',
-      chatId: 'test-chat-id',
-      senderId: 'test-sender-id',
-      content: 'Test message',
-      createdAt: new Date(),
+    expect(io.to).toHaveBeenCalledWith('chat:chat-1');
+    expect(toEmit).toHaveBeenCalledWith('message', {
+      id: 'm-1',
+      chatId: 'chat-1',
+      senderId: 'user-1',
+      content: 'hola',
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
     });
 
-    io.on('connection', (socket) => {
-      socket.join(`chat:${testEvent.chatId}`);
-      socket.on('message', (data) => {
-        expect(data.id).toBe(testEvent.messageId);
-        expect(data.chatId).toBe(testEvent.chatId);
-        expect(data.senderId).toBe(testEvent.senderId);
-        expect(data.content).toBe(testEvent.content);
-        done();
-      });
-
-      mockEventBus.publish(testEvent);
+    const typingEvent = new UserTypingEvent({
+      userId: 'user-2',
+      chatId: 'chat-2',
     });
-    socket.connect();
-  });
+    await listeners.get(UserTypingEvent.name)?.(typingEvent);
 
-  it('should emit typing event on UserTypingEvent', (done) => {
-    const testEvent = new UserTypingEvent({
-      userId: 'test-user-id',
-      chatId: 'test-chat-id',
+    expect(io.to).toHaveBeenCalledWith('chat:chat-2');
+    expect(toEmit).toHaveBeenCalledWith('typing', {
+      userId: 'user-2',
+      chatId: 'chat-2',
     });
 
-    io.on('connection', (socket) => {
-      socket.join(`chat:${testEvent.chatId}`);
-      socket.on('typing', (data) => {
-        expect(data.userId).toBe(testEvent.userId);
-        expect(data.chatId).toBe(testEvent.chatId);
-        done();
-      });
+    const notification = new Notification('user-3', 'title', 'body', { kind: 'info' });
+    notification.id = 'n-1';
+    notification.createdAt = new Date('2024-01-02T00:00:00.000Z');
+    const notificationEvent = new NotificationSentEvent(notification);
+    await listeners.get(NotificationSentEvent.name)?.(notificationEvent);
 
-      mockEventBus.publish(testEvent);
+    expect(io.to).toHaveBeenCalledWith('user:user-3');
+    expect(toEmit).toHaveBeenCalledWith('notification', {
+      id: 'n-1',
+      title: 'title',
+      message: 'body',
+      read: false,
+      createdAt: new Date('2024-01-02T00:00:00.000Z'),
+      metadata: { kind: 'info' },
     });
-    socket.connect();
   });
 });

@@ -23,4 +23,10 @@ export interface MessageRepository {
    * @returns Array of messages ordered by createdAt descending (newest first)
    */
   findByChatId(chatId: string, limit: number, cursor?: string): Promise<Message[]>;
+
+  deleteByUserId(userId: string, session?: any): Promise<void>;
+
+  deleteByChatId(chatId: string, session?: any): Promise<void>;
+
+  findLatestByChatId(chatId: string, session?: any): Promise<Message | null>;
 }

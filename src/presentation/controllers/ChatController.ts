@@ -14,9 +14,11 @@ export class ChatController {
   async create(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.userId!; // From auth middleware
+      const { recipientId } = req.body;
       
       const chat = await this.createChatUseCase.execute({
         userId,
+        recipientId,
       });
 
       res.status(201).json(successResponse(chat));

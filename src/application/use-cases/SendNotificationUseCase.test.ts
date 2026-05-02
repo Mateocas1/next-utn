@@ -3,7 +3,7 @@
 import { SendNotificationUseCase } from './SendNotificationUseCase';
 import { Notification } from '../../domain/entities/Notification';
 import { NotificationRepository } from '../../domain/entities/Notification';
-import { EventBus } from '../../infrastructure/events/EventBus';
+import { EventBus } from '../ports/EventBus';
 import { NotificationSentEvent } from '../../domain/events/NotificationSentEvent';
 
 // Mock NotificationRepository
@@ -11,11 +11,13 @@ const mockNotificationRepository: jest.Mocked<NotificationRepository> = {
     save: jest.fn(),
     findByUserId: jest.fn(),
     markAsRead: jest.fn(),
+    deleteByUserId: jest.fn(),
 };
 
 // Mock EventBus
 const mockEventBus: jest.Mocked<EventBus> = {
     publish: jest.fn(),
+    subscribe: jest.fn(),
 };
 
 describe('SendNotificationUseCase', () => {

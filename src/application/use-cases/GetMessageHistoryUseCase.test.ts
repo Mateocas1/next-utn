@@ -11,7 +11,7 @@ describe('GetMessageHistoryUseCase', () => {
   
   it('should return first page of messages when user is participant', async () => {
     // Arrange
-    const chat = Chat.create('user-123');
+    const chat = Chat.create('user-123', 'user-456');
     const mockMessages = [
       Message.create(chat.id, 'user-123', 'Message 1'),
       Message.create(chat.id, 'user-123', 'Message 2'),
@@ -22,12 +22,18 @@ describe('GetMessageHistoryUseCase', () => {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(chat),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const mockMessageRepository: MessageRepository = {
       create: jest.fn(),
-      findByChatId: jest.fn().mockResolvedValue(mockMessages)
+      findByChatId: jest.fn().mockResolvedValue(mockMessages),
+      deleteByUserId: jest.fn(),
+      deleteByChatId: jest.fn(),
+      findLatestByChatId: jest.fn()
     };
     
     const useCase = new GetMessageHistoryUseCase(mockChatRepository, mockMessageRepository);
@@ -39,13 +45,22 @@ describe('GetMessageHistoryUseCase', () => {
     
     // Act & Assert
     // This will fail because GetMessageHistoryUseCase doesn't exist
-    await expect(useCase.execute(input)).resolves.toEqual({
-      data: mockMessages.slice(0, 2), // First 2 messages
-      meta: {
-        nextCursor: expect.any(String),
-        limit: 2
-      }
+    const result = await useCase.execute(input);
+
+    expect(result.meta).toEqual({
+      nextCursor: expect.any(String),
+      limit: 2
     });
+    expect(result.data).toHaveLength(2);
+    expect(result.data[0]).toEqual({
+      id: mockMessages[0].id,
+      chatId: mockMessages[0].chatId,
+      senderId: mockMessages[0].senderId,
+      content: mockMessages[0].content,
+      createdAt: mockMessages[0].createdAt.toISOString()
+    });
+    expect(result.data[0]).not.toBeInstanceOf(Message);
+    expect(typeof result.data[0].createdAt).toBe('string');
     
     // Verify chat existence was checked
     expect(mockChatRepository.findById).toHaveBeenCalledWith(chat.id);
@@ -59,14 +74,17 @@ describe('GetMessageHistoryUseCase', () => {
   
   it('should return messages with cursor pagination', async () => {
     // Arrange
-    const chat = Chat.create('user-123');
+    const chat = Chat.create('user-123', 'user-456');
     const cursor = 'eyJsYXN0SWQiOiJtc2ctMTIzIiwibGFzdFNvcnRWYWx1ZSI6MTcwMTYzMjAwMDAwMH0=';
     
     const mockChatRepository: ChatRepository = {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(chat),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const mockMessageRepository: MessageRepository = {
@@ -75,7 +93,10 @@ describe('GetMessageHistoryUseCase', () => {
         Message.create(chat.id, 'user-123', 'Message 1'),
         Message.create(chat.id, 'user-123', 'Message 2'),
         Message.create(chat.id, 'user-123', 'Message 3') // Third to trigger nextCursor
-      ])
+      ]),
+      deleteByUserId: jest.fn(),
+      deleteByChatId: jest.fn(),
+      findLatestByChatId: jest.fn()
     };
     
     const useCase = new GetMessageHistoryUseCase(mockChatRepository, mockMessageRepository);
@@ -87,16 +108,19 @@ describe('GetMessageHistoryUseCase', () => {
     };
     
     // Act & Assert
-    await expect(useCase.execute(input)).resolves.toEqual({
-      data: expect.arrayContaining([
-        expect.objectContaining({ content: 'Message 1' }),
-        expect.objectContaining({ content: 'Message 2' })
-      ]),
-      meta: {
-        nextCursor: expect.any(String),
-        limit: 2
-      }
+    const result = await useCase.execute(input);
+
+    expect(result.meta).toEqual({
+      nextCursor: expect.any(String),
+      limit: 2
     });
+    expect(result.data).toHaveLength(2);
+    expect(result.data[0]).toEqual(
+      expect.objectContaining({
+        content: 'Message 1',
+        createdAt: expect.any(String)
+      })
+    );
     
     // Verify messages were fetched with cursor
     expect(mockMessageRepository.findByChatId).toHaveBeenCalledWith(
@@ -112,12 +136,18 @@ describe('GetMessageHistoryUseCase', () => {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(null),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const mockMessageRepository: MessageRepository = {
       create: jest.fn(),
-      findByChatId: jest.fn()
+      findByChatId: jest.fn(),
+      deleteByUserId: jest.fn(),
+      deleteByChatId: jest.fn(),
+      findLatestByChatId: jest.fn()
     };
     
     const useCase = new GetMessageHistoryUseCase(mockChatRepository, mockMessageRepository);
@@ -136,18 +166,24 @@ describe('GetMessageHistoryUseCase', () => {
   
   it('should throw ForbiddenError when user is not participant', async () => {
     // Arrange
-    const chat = Chat.create('different-user'); // Created by different user
+    const chat = Chat.create('different-user', 'different-user-2'); // Created by different user
     
     const mockChatRepository: ChatRepository = {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(chat),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const mockMessageRepository: MessageRepository = {
       create: jest.fn(),
-      findByChatId: jest.fn()
+      findByChatId: jest.fn(),
+      deleteByUserId: jest.fn(),
+      deleteByChatId: jest.fn(),
+      findLatestByChatId: jest.fn()
     };
     
     const useCase = new GetMessageHistoryUseCase(mockChatRepository, mockMessageRepository);
@@ -166,18 +202,24 @@ describe('GetMessageHistoryUseCase', () => {
   
   it('should return empty data array when no more messages', async () => {
     // Arrange
-    const chat = Chat.create('user-123');
+    const chat = Chat.create('user-123', 'user-456');
     
     const mockChatRepository: ChatRepository = {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(chat),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const mockMessageRepository: MessageRepository = {
       create: jest.fn(),
-      findByChatId: jest.fn().mockResolvedValue([])
+      findByChatId: jest.fn().mockResolvedValue([]),
+      deleteByUserId: jest.fn(),
+      deleteByChatId: jest.fn(),
+      findLatestByChatId: jest.fn()
     };
     
     const useCase = new GetMessageHistoryUseCase(mockChatRepository, mockMessageRepository);

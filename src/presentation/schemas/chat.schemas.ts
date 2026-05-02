@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const createChatSchema = z.object({
-  // No body needed for creating a chat - user is inferred from auth
+  recipientId: z.string().uuid('Invalid recipient ID'),
 });
 
 export const chatIdSchema = z.object({

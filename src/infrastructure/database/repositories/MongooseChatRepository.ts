@@ -125,4 +125,52 @@ export class MongooseChatRepository implements ChatRepository {
       version: updatedDoc.__v,
     });
   }
+
+  async removeParticipant(chatId: string, userId: string, session?: any): Promise<Chat> {
+    const updatedDoc = await ChatModel.findOneAndUpdate(
+      { id: chatId },
+      {
+        $pull: { participants: userId },
+        $set: { updatedAt: new Date() },
+        $inc: { __v: 1 },
+      },
+      {
+        returnDocument: 'after',
+        session,
+        runValidators: true,
+      }
+    ).exec();
+
+    if (!updatedDoc) {
+      throw new Error('Chat not found');
+    }
+
+    return Chat.reconstruct({
+      id: updatedDoc.id,
+      participants: updatedDoc.participants,
+      latestMessagePreview: updatedDoc.latestMessagePreview || undefined,
+      createdAt: updatedDoc.createdAt,
+      updatedAt: updatedDoc.updatedAt,
+      version: updatedDoc.__v,
+    });
+  }
+
+  async delete(id: string, session?: any): Promise<void> {
+    await ChatModel.deleteOne({ id }, { session });
+  }
+
+  async findByParticipantId(userId: string, session?: any): Promise<Chat[]> {
+    const chatDocs = await ChatModel.find({ participants: userId }, null, { session }).exec();
+
+    return chatDocs.map((chatDoc) =>
+      Chat.reconstruct({
+        id: chatDoc.id,
+        participants: chatDoc.participants,
+        latestMessagePreview: chatDoc.latestMessagePreview || undefined,
+        createdAt: chatDoc.createdAt,
+        updatedAt: chatDoc.updatedAt,
+        version: chatDoc.__v,
+      })
+    );
+  }
 }

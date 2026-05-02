@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthenticationError } from '@domain/errors/DomainError';
 import { JWTService } from '@infrastructure/auth/JWTService';
 import { authMiddleware } from './auth';
+import { UserRepository } from '@application/ports/UserRepository';
+import { User } from '@domain/entities/User';
 
 // Mock JWTService
 jest.mock('@infrastructure/auth/JWTService');
@@ -11,6 +13,15 @@ describe('authMiddleware', () => {
   let mockRes: Partial<Response>;
   let mockNext: NextFunction;
   let mockJWTService: jest.Mocked<JWTService>;
+  let mockUserRepository: jest.Mocked<Pick<UserRepository, 'findById'>>;
+
+  const buildUser = (id: string): User => User.reconstruct({
+    id,
+    email: 'test@example.com',
+    displayName: 'Test User',
+    passwordHash: 'hash',
+    createdAt: new Date(),
+  });
 
   beforeEach(() => {
     mockReq = {
@@ -29,13 +40,19 @@ describe('authMiddleware', () => {
       secret: 'test-secret',
       expiresIn: '1h',
     } as unknown as jest.Mocked<JWTService>;
+
+    mockUserRepository = {
+      findById: jest.fn(),
+    };
   });
 
   it('should call next() with userId when valid token is provided', async () => {
     mockReq.headers = { authorization: 'Bearer valid-token' };
     mockJWTService.verify.mockResolvedValue({ userId: 'user-123' });
 
-    const middleware = authMiddleware(mockJWTService);
+    mockUserRepository.findById.mockResolvedValue(buildUser('user-123'));
+
+    const middleware = authMiddleware(mockJWTService, mockUserRepository);
     
     // Call middleware
     middleware(mockReq as Request, mockRes as Response, mockNext);
@@ -44,6 +61,7 @@ describe('authMiddleware', () => {
     await new Promise(process.nextTick);
 
     expect(mockJWTService.verify).toHaveBeenCalledWith('valid-token');
+    expect(mockUserRepository.findById).toHaveBeenCalledWith('user-123');
     expect(mockReq.userId).toBe('user-123');
     expect(mockNext).toHaveBeenCalled();
     expect(mockRes.status).not.toHaveBeenCalled();
@@ -53,7 +71,7 @@ describe('authMiddleware', () => {
   it('should return 401 with AUTHENTICATION_REQUIRED when no authorization header', () => {
     mockReq.headers = {}; // No authorization header
 
-    const middleware = authMiddleware(mockJWTService);
+    const middleware = authMiddleware(mockJWTService, mockUserRepository);
     
     middleware(mockReq as Request, mockRes as Response, mockNext);
 
@@ -71,7 +89,7 @@ describe('authMiddleware', () => {
   it('should return 401 with AUTHENTICATION_REQUIRED when authorization header is malformed', () => {
     mockReq.headers = { authorization: 'InvalidFormat' }; // Missing "Bearer "
 
-    const middleware = authMiddleware(mockJWTService);
+    const middleware = authMiddleware(mockJWTService, mockUserRepository);
     
     middleware(mockReq as Request, mockRes as Response, mockNext);
 
@@ -92,7 +110,7 @@ describe('authMiddleware', () => {
       new AuthenticationError('Token expired', 'TOKEN_EXPIRED')
     );
 
-    const middleware = authMiddleware(mockJWTService);
+    const middleware = authMiddleware(mockJWTService, mockUserRepository);
     
     middleware(mockReq as Request, mockRes as Response, mockNext);
 
@@ -116,7 +134,7 @@ describe('authMiddleware', () => {
       new AuthenticationError('Invalid token', 'INVALID_TOKEN')
     );
 
-    const middleware = authMiddleware(mockJWTService);
+    const middleware = authMiddleware(mockJWTService, mockUserRepository);
     
     middleware(mockReq as Request, mockRes as Response, mockNext);
 
@@ -140,7 +158,7 @@ describe('authMiddleware', () => {
       new AuthenticationError('Authentication failed')
     );
 
-    const middleware = authMiddleware(mockJWTService);
+    const middleware = authMiddleware(mockJWTService, mockUserRepository);
     
     middleware(mockReq as Request, mockRes as Response, mockNext);
 
@@ -162,7 +180,9 @@ describe('authMiddleware', () => {
     mockReq.headers = { Authorization: 'Bearer valid-token' }; // Capital A
     mockJWTService.verify.mockResolvedValue({ userId: 'user-123' });
 
-    const middleware = authMiddleware(mockJWTService);
+    mockUserRepository.findById.mockResolvedValue(buildUser('user-123'));
+
+    const middleware = authMiddleware(mockJWTService, mockUserRepository);
     
     middleware(mockReq as Request, mockRes as Response, mockNext);
 
@@ -178,7 +198,9 @@ describe('authMiddleware', () => {
     mockReq.headers = { authorization: '  Bearer   valid-token   ' };
     mockJWTService.verify.mockResolvedValue({ userId: 'user-123' });
 
-    const middleware = authMiddleware(mockJWTService);
+    mockUserRepository.findById.mockResolvedValue(buildUser('user-123'));
+
+    const middleware = authMiddleware(mockJWTService, mockUserRepository);
     
     middleware(mockReq as Request, mockRes as Response, mockNext);
 
@@ -188,5 +210,28 @@ describe('authMiddleware', () => {
     expect(mockJWTService.verify).toHaveBeenCalledWith('valid-token');
     expect(mockReq.userId).toBe('user-123');
     expect(mockNext).toHaveBeenCalled();
+  });
+
+  it('should return 401 with INVALID_TOKEN when token user no longer exists', async () => {
+    mockReq.headers = { authorization: 'Bearer stale-token' };
+    mockJWTService.verify.mockResolvedValue({ userId: 'deleted-user-id' });
+    mockUserRepository.findById.mockResolvedValue(null);
+
+    const middleware = authMiddleware(mockJWTService, mockUserRepository);
+
+    middleware(mockReq as Request, mockRes as Response, mockNext);
+
+    await new Promise(process.nextTick);
+
+    expect(mockJWTService.verify).toHaveBeenCalledWith('stale-token');
+    expect(mockUserRepository.findById).toHaveBeenCalledWith('deleted-user-id');
+    expect(mockRes.status).toHaveBeenCalledWith(401);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      success: false,
+      data: null,
+      message: 'Invalid token',
+      errorCode: 'INVALID_TOKEN',
+    });
+    expect(mockNext).not.toHaveBeenCalled();
   });
 });

@@ -133,4 +133,45 @@ describe('MongooseUserRepository', () => {
       expect(foundUser).toBeNull();
     });
   });
+
+  describe('findAll', () => {
+    it('should return all users', async () => {
+      const user1 = User.create('all-1@example.com', 'All 1', '$2b$12$hash1');
+      const user2 = User.create('all-2@example.com', 'All 2', '$2b$12$hash2');
+      await repository.create(user1);
+      await repository.create(user2);
+
+      const users = await repository.findAll();
+
+      expect(users).toHaveLength(2);
+      expect(users.map((u: User) => u.email).sort()).toEqual(['all-1@example.com', 'all-2@example.com']);
+    });
+  });
+
+  describe('delete', () => {
+    it('should delete a user by id', async () => {
+      const user = User.create('delete-repo@example.com', 'Delete Repo', '$2b$12$hash');
+      await repository.create(user);
+
+      await repository.delete(user.id);
+
+      const found = await repository.findById(user.id);
+      expect(found).toBeNull();
+    });
+
+    it('should support session parameter', async () => {
+      const user = User.create('delete-session@example.com', 'Delete Session', '$2b$12$hash');
+      await repository.create(user);
+      const session = await mongoose.startSession();
+
+      await session.withTransaction(async () => {
+        await repository.delete(user.id, session);
+      });
+
+      session.endSession();
+
+      const found = await repository.findById(user.id);
+      expect(found).toBeNull();
+    });
+  });
 });

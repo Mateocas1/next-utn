@@ -13,7 +13,9 @@ describe('RegisterUserUseCase', () => {
     const mockUserRepository: UserRepository = {
       findByEmail: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockImplementation(async (user) => user),
-      findById: jest.fn().mockResolvedValue(null)
+      findById: jest.fn().mockResolvedValue(null),
+      findAll: jest.fn(),
+      delete: jest.fn()
     };
     
     const mockPasswordHasher: PasswordHasher = {
@@ -55,7 +57,9 @@ describe('RegisterUserUseCase', () => {
     const mockUserRepository: UserRepository = {
       findByEmail: jest.fn().mockResolvedValue(existingUser),
       create: jest.fn().mockImplementation(async (user) => user),
-      findById: jest.fn().mockResolvedValue(null)
+      findById: jest.fn().mockResolvedValue(null),
+      findAll: jest.fn(),
+      delete: jest.fn()
     };
     
     const mockPasswordHasher: PasswordHasher = {

@@ -103,7 +103,7 @@ Server->>Client: Emitir 'typing' a room `chat:<chatId>`
 
 6. **Frontend**: El cliente escucha el evento `notification` y muestra la notificación al usuario.
 
-7. **Marcar como leída**: Cuando el usuario ve la notificación, el frontend envía una petición `PATCH /api/notifications/:id/read` para marcarla como leída.
+7. **Marcar como leída**: Cuando el usuario ve la notificación, el frontend envía una petición `PATCH /notifications/:id/read` para marcarla como leída.
 
 ---
 
@@ -145,14 +145,14 @@ Server->>Client: Emitir 'typing' a room `chat:<chatId>`
 ## 🔄 Flujo de Eventos
 
 ### Envío de Mensaje
-1. El cliente envía un mensaje vía HTTP (`POST /api/messages`).
+1. El cliente envía un mensaje vía HTTP (`POST /messages`).
 2. `SendMessageUseCase` guarda el mensaje en MongoDB (transacción).
 3. `SendMessageUseCase` publica `MessageSentEvent` en `EventBus`.
 4. `WebSocketGateway` escucha `MessageSentEvent` y emite el mensaje a la room `chat:<chatId>`.
 5. Todos los clientes en la room reciben el mensaje vía WebSocket.
 
 ### Notificación de "Usuario Escribiendo"
-1. El cliente envía `POST /api/messages/typing` con `{ chatId, isTyping: true }`.
+1. El cliente envía `POST /messages/typing` con `{ chatId, isTyping: true }`.
 2. `NotifyUserTypingUseCase` publica `UserTypingEvent` en `EventBus`.
 3. `WebSocketGateway` escucha `UserTypingEvent` y emite el evento a la room `chat:<chatId>`.
 4. Todos los clientes en la room reciben la notificación vía WebSocket.

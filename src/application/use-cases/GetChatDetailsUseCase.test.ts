@@ -9,12 +9,15 @@ describe('GetChatDetailsUseCase', () => {
   
   it('should return chat details when user is participant', async () => {
     // Arrange
-    const chat = Chat.create('user-123');
+    const chat = Chat.create('user-123', 'user-456');
     const mockChatRepository: ChatRepository = {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(chat),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const useCase = new GetChatDetailsUseCase(mockChatRepository);
@@ -43,7 +46,10 @@ describe('GetChatDetailsUseCase', () => {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(null),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const useCase = new GetChatDetailsUseCase(mockChatRepository);
@@ -58,12 +64,15 @@ describe('GetChatDetailsUseCase', () => {
   
   it('should throw ForbiddenError when user is not participant', async () => {
     // Arrange
-    const chat = Chat.create('different-user'); // Created by different user
+    const chat = Chat.create('different-user', 'different-user-2'); // Created by different user
     const mockChatRepository: ChatRepository = {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(chat),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const useCase = new GetChatDetailsUseCase(mockChatRepository);
@@ -78,7 +87,7 @@ describe('GetChatDetailsUseCase', () => {
   
   it('should allow access when user is participant (not creator)', async () => {
     // Arrange
-    const chat = Chat.create('creator-user');
+    const chat = Chat.create('creator-user', 'peer-user');
     // Manually add another participant
     const chatWithParticipants = {
       ...chat,
@@ -89,7 +98,10 @@ describe('GetChatDetailsUseCase', () => {
       create: jest.fn(),
       findById: jest.fn().mockResolvedValue(chatWithParticipants),
       findByUserId: jest.fn(),
-      updateLatestMessage: jest.fn()
+      updateLatestMessage: jest.fn(),
+      removeParticipant: jest.fn(),
+      delete: jest.fn(),
+      findByParticipantId: jest.fn()
     };
     
     const useCase = new GetChatDetailsUseCase(mockChatRepository);

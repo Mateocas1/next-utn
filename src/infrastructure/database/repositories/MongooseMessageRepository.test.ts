@@ -144,4 +144,59 @@ describe('MongooseMessageRepository', () => {
       expect(messages).toHaveLength(0);
     });
   });
+
+  describe('deleteByUserId', () => {
+    it('should delete all messages sent by user', async () => {
+      const toDelete1 = Message.create('chat1', 'user-target', 'a');
+      const toDelete2 = Message.create('chat2', 'user-target', 'b');
+      const toKeep = Message.create('chat3', 'user-other', 'c');
+      await repository.create(toDelete1);
+      await repository.create(toDelete2);
+      await repository.create(toKeep);
+
+      await repository.deleteByUserId('user-target');
+
+      const targetMessages = await MessageModel.find({ senderId: 'user-target' });
+      const otherMessages = await MessageModel.find({ senderId: 'user-other' });
+      expect(targetMessages).toHaveLength(0);
+      expect(otherMessages).toHaveLength(1);
+    });
+  });
+
+  describe('deleteByChatId', () => {
+    it('should delete all messages from chat', async () => {
+      const chatMsg1 = Message.create('chat-target', 'user1', 'a');
+      const chatMsg2 = Message.create('chat-target', 'user2', 'b');
+      const otherChatMsg = Message.create('chat-other', 'user2', 'c');
+      await repository.create(chatMsg1);
+      await repository.create(chatMsg2);
+      await repository.create(otherChatMsg);
+
+      await repository.deleteByChatId('chat-target');
+
+      const targetChatMessages = await MessageModel.find({ chatId: 'chat-target' });
+      const otherChatMessages = await MessageModel.find({ chatId: 'chat-other' });
+      expect(targetChatMessages).toHaveLength(0);
+      expect(otherChatMessages).toHaveLength(1);
+    });
+  });
+
+  describe('findLatestByChatId', () => {
+    it('should return latest message for chat', async () => {
+      await repository.create(Message.create('chat-latest', 'u1', 'old'));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const newest = Message.create('chat-latest', 'u2', 'newest');
+      await repository.create(newest);
+
+      const latest = await repository.findLatestByChatId('chat-latest');
+
+      expect(latest).not.toBeNull();
+      expect(latest?.content).toBe('newest');
+    });
+
+    it('should return null when chat has no messages', async () => {
+      const latest = await repository.findLatestByChatId('empty-chat');
+      expect(latest).toBeNull();
+    });
+  });
 });
