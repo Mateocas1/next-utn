@@ -25,6 +25,14 @@
     },
     "types": ["node", "jest"]
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/index.ts",
+    "src/config/**/*.ts",
+    "src/domain/**/*.ts",
+    "src/application/**/*.ts",
+    "src/infrastructure/**/*.ts",
+    "src/presentation/**/*.ts",
+    "src/types/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }

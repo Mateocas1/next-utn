@@ -1,128 +1,72 @@
-# Chat API — Trabajo Final Integrador Node.js
+# Chat API — Trabajo Final Integrador Node.js (UTN)
 
-Este proyecto es el backend de un clon de chat desarrollado con **Node.js**, **Express**, **TypeScript** y **MongoDB**.  
-La idea fue cumplir la consigna del trabajo y, al mismo tiempo, llevar la implementación a un nivel más sólido en arquitectura, validación, resiliencia y testing.
+Este repositorio es el **backend** de un clon de chat. Implementa una API REST con Node.js/Express y MongoDB, y suma tiempo real con Socket.IO. La idea no fue “poner todo junto y que funcione”, sino **separar responsabilidades** para que el código sea mantenible y fácil de explicar en la defensa.
 
----
-
-## Qué es este proyecto
-
-Es una API para manejar:
-
-- usuarios
-- chats
-- mensajes
-- notificaciones
-
-La API permite crear usuarios, autenticarse, iniciar chats entre usuarios, enviar mensajes, consultar historial y emitir eventos en tiempo real mediante WebSockets.
+La consigna pide usuarios, chats y mensajes; este backend los cubre con respuestas consistentes, validación de entrada y una capa de autenticación. Además, usa eventos de dominio para disparar notificaciones y para el tiempo real.
 
 ---
 
-## URLs importantes
+## 🔗 URLs públicas
 
-- **Backend deployado (Railway):** `https://next-utn-production.up.railway.app`
+- **Backend (Railway):** `https://next-utn-production.up.railway.app`
 - **Healthcheck:** `https://next-utn-production.up.railway.app/health`
-- **Raíz del backend:** `https://next-utn-production.up.railway.app/`
-- **Desarrollo local:** `http://localhost:3000`
+- **Local:** `http://localhost:3000`
+
+> Si alguna URL cambia, actualizala en esta sección.
 
 ---
 
-## Stack tecnológico
+## 🚀 Cómo correr el proyecto
 
-- **Node.js**
-- **Express**
-- **TypeScript**
-- **MongoDB + Mongoose**
-- **Redis**
-- **Socket.IO**
-- **Zod**
-- **JWT**
+### Requisitos
 
----
+- Node.js 18+
+- MongoDB en local o remoto
+- Redis (se usa para rate limiting, idempotencia y el adapter de Socket.IO)
 
-## Instalación local
-
-### Requisitos previos
-
-Antes de levantar el proyecto necesitás tener instalado:
-
-- Node.js 18 o superior
-- MongoDB
-- Redis
-
-### 1. Clonar el repositorio
-
-```bash
-git clone <URL_DEL_REPO>
-cd finalNodeJS
-```
-
-### 2. Instalar dependencias
+### Instalación
 
 ```bash
 npm install
 ```
 
-### 3. Crear archivo de entorno
+### Variables de entorno
 
-Copiá `.env.example` a `.env` y completá los valores necesarios.
-
-Ejemplo:
+Copiá `.env.example` a `.env` y completá valores. Ejemplo:
 
 ```env
-PORT=3000
-MONGO_URI=mongodb://localhost:27017/chat-api
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=tu_secreto_super_seguro_para_jwt
-JWT_EXPIRES_IN=24h
+MONGO_URI=mongodb://localhost:27017/chat
+REDIS_URL=redis://localhost:6379/0
+JWT_SECRET=super-secret-jwt-key-that-is-at-least-32-characters-long
+JWT_EXPIRES_IN=7d
 RATE_LIMIT_MAX=100
 RATE_LIMIT_WINDOW=60
 IDEMPOTENCY_TTL=86400
-CORS_ORIGIN=http://localhost:5173
+PORT=3000
+CORS_ORIGIN=http://localhost:3000
 ```
 
-### 4. Levantar el proyecto en desarrollo
+### Levantar en desarrollo
 
 ```bash
 npm run dev
 ```
 
-### 5. Ejecutar tests
+### Tests
+
+Para verificar el backend antes de entregar:
 
 ```bash
+npm run typecheck
 npm test
+npm run test:e2e
 ```
 
 ---
 
-## Deploy
+## 📦 Formato de respuesta
 
-### Deploy local
-
-Para desarrollo, el backend corre en:
-
-`http://localhost:3000`
-
-El healthcheck local queda disponible en:
-
-`http://localhost:3000/health`
-
-### Deploy web
-
-El proyecto está desplegado en Railway en:
-
-`https://next-utn-production.up.railway.app`
-
-Para validar que está corriendo correctamente:
-
-- `GET /`
-- `GET /health`
-
----
-
-## Formato general de respuesta
-
-La API responde con un formato consistente:
+Todas las respuestas siguen el mismo contrato:
 
 ```json
 {
@@ -131,7 +75,7 @@ La API responde con un formato consistente:
 }
 ```
 
-Cuando hay paginación, la metadata va al nivel superior:
+Cuando hay paginación:
 
 ```json
 {
@@ -144,18 +88,40 @@ Cuando hay paginación, la metadata va al nivel superior:
 }
 ```
 
+Errores:
+
+```json
+{
+  "success": false,
+  "data": null,
+  "message": "...",
+  "errorCode": "...",
+  "details": []
+}
+```
+
 ---
 
-## Endpoints principales
+## 🔐 Autenticación
 
-## Users
+Se usa JWT. El token se envía en el header:
 
-### `POST /users`
-Crea un usuario nuevo.
+```
+Authorization: Bearer <token>
+```
 
-Compatibilidad legacy disponible también en `POST /users/register`.
+Las rutas de **chats**, **messages** y **notifications** lo requieren.
 
-#### Request
+---
+
+## 📚 Endpoints
+
+> Base URL: `https://next-utn-production.up.railway.app`
+
+### Users
+
+#### `POST /users`
+Registro de usuario.
 
 ```json
 {
@@ -165,7 +131,7 @@ Compatibilidad legacy disponible también en `POST /users/register`.
 }
 ```
 
-#### Response
+Respuesta:
 
 ```json
 {
@@ -179,10 +145,10 @@ Compatibilidad legacy disponible también en `POST /users/register`.
 }
 ```
 
-### `POST /users/login`
-Inicia sesión y devuelve token JWT.
+> También existe `POST /users/register` por compatibilidad.
 
-#### Request
+#### `POST /users/login`
+Login y emisión de token JWT.
 
 ```json
 {
@@ -191,7 +157,7 @@ Inicia sesión y devuelve token JWT.
 }
 ```
 
-#### Response
+Respuesta:
 
 ```json
 {
@@ -207,59 +173,24 @@ Inicia sesión y devuelve token JWT.
 }
 ```
 
-### `GET /users`
-Lista usuarios disponibles.
+#### `GET /users`
+Lista de usuarios.
 
-#### Response
+#### `DELETE /users/:id`
+Borrado de usuario (requiere auth).
 
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "uuid-v4",
-      "email": "user@example.com",
-      "displayName": "Juan Perez",
-      "createdAt": "2023-10-25T10:00:00.000Z"
-    }
-  ]
-}
+```
+Authorization: Bearer <token>
 ```
 
-### `DELETE /users/:id`
-Elimina un usuario.
-
-Requiere:
-
-`Authorization: Bearer <token>`
-
-#### Response
-
-`204 No Content`
-
-#### Qué resuelve este endpoint
-
-El borrado no se limita a eliminar la fila del usuario. También elimina de forma transaccional:
-
-- los mensajes del usuario
-- las notificaciones del usuario
-- su participación en chats
-- los chats que queden vacíos
-
-Y, si el chat sigue existiendo, recalcula el `latestMessagePreview`.
+Devuelve `204 No Content`.
 
 ---
 
-## Chats
+### Chats (requieren auth)
 
-Requieren:
-
-`Authorization: Bearer <token>`
-
-### `POST /chats`
-Crea un chat 1:1 entre el usuario autenticado y otro usuario seleccionado.
-
-#### Request
+#### `POST /chats`
+Crea un chat 1:1.
 
 ```json
 {
@@ -267,59 +198,22 @@ Crea un chat 1:1 entre el usuario autenticado y otro usuario seleccionado.
 }
 ```
 
-#### Response
+#### `GET /chats?limit=10&cursor=...`
+Lista de chats con paginación por cursor.
 
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid-chat",
-    "participants": ["uuid-user-1", "uuid-user-2"],
-    "createdAt": "2023-10-25T10:05:00.000Z",
-    "updatedAt": "2023-10-25T10:05:00.000Z"
-  }
-}
-```
-
-#### Qué resuelve este endpoint
-
-Este cambio fue importante porque antes el backend no creaba realmente un chat con el destinatario seleccionado. Ahora el flujo “nuevo chat” queda coherente entre backend y frontend.
-
-### `GET /chats?limit=10&cursor=...`
-Lista chats del usuario autenticado.
-
-#### Response
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "uuid-chat",
-      "participants": ["uuid-user-1", "uuid-user-2"],
-      "latestMessagePreview": "Hola, ¿cómo estás?",
-      "updatedAt": "2023-10-25T10:10:00.000Z"
-    }
-  ],
-  "meta": {
-    "nextCursor": "base64_encoded_next_cursor",
-    "limit": 10
-  }
-}
-```
+#### `GET /chats/:chatId`
+Detalle de un chat.
 
 ---
 
-## Messages
+### Messages (requieren auth)
 
-Requieren:
+#### `POST /messages`
+Envía un mensaje. Soporta **idempotencia** con header opcional:
 
-`Authorization: Bearer <token>`
-
-### `POST /messages`
-Envía un mensaje dentro de un chat.
-
-#### Request
+```
+Idempotency-Key: <uuid>
+```
 
 ```json
 {
@@ -328,53 +222,11 @@ Envía un mensaje dentro de un chat.
 }
 ```
 
-#### Response
+#### `GET /messages?chatId=uuid-chat&limit=20&cursor=...`
+Historial paginado de mensajes.
 
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid-message",
-    "chatId": "uuid-chat",
-    "senderId": "uuid-user-1",
-    "content": "Hola, ¿cómo estás?",
-    "createdAt": "2023-10-25T10:10:00.000Z"
-  }
-}
-```
-
-### `GET /messages?chatId=uuid-chat&limit=20&cursor=...`
-Devuelve historial de mensajes del chat.
-
-#### Response
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "uuid-message",
-      "chatId": "uuid-chat",
-      "senderId": "uuid-user-1",
-      "content": "Hola, ¿cómo estás?",
-      "createdAt": "2023-10-25T10:10:00.000Z"
-    }
-  ],
-  "meta": {
-    "nextCursor": "base64_encoded_next_cursor",
-    "limit": 20
-  }
-}
-```
-
-#### Qué resuelve este endpoint
-
-Acá se corrigió una fuga de entidades internas del dominio. Antes podían aparecer estructuras no aptas para frontend; ahora el historial devuelve DTOs planos y consistentes.
-
-### `POST /messages/typing`
-Emite la señal de “usuario escribiendo”.
-
-#### Request
+#### `POST /messages/typing`
+Emite evento de “usuario escribiendo”.
 
 ```json
 {
@@ -383,58 +235,21 @@ Emite la señal de “usuario escribiendo”.
 }
 ```
 
-#### Response
-
-```json
-{
-  "success": true,
-  "data": {
-    "success": true
-  }
-}
-```
-
 ---
 
-## Notifications
+### Notifications (requieren auth)
 
-Requieren:
+#### `GET /notifications`
+Lista notificaciones.
 
-`Authorization: Bearer <token>`
-
-### `GET /notifications`
-Lista notificaciones del usuario.
-
-#### Response
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "uuid-notification",
-      "userId": "uuid-user",
-      "title": "Nuevo mensaje",
-      "message": "Tienes un nuevo mensaje",
-      "read": false,
-      "createdAt": "2023-10-25T10:15:00.000Z",
-      "metadata": {
-        "chatId": "uuid-chat",
-        "senderId": "uuid-sender"
-      }
-    }
-  ]
-}
-```
-
-### `PATCH /notifications/:id/read`
+#### `PATCH /notifications/:id/read`
 Marca una notificación como leída.
 
 ---
 
-## WebSockets
+## ⚡ Tiempo real (Socket.IO)
 
-La API soporta Socket.IO para eventos en tiempo real.
+El backend soporta WebSockets con Socket.IO.
 
 ### Handshake
 
@@ -447,19 +262,25 @@ La API soporta Socket.IO para eventos en tiempo real.
 ```
 
 ### Eventos cliente → servidor
-- `joinChat`
-- `leaveChat`
+
+- `joinChat` (chatId)
+- `leaveChat` (chatId)
 
 ### Eventos servidor → cliente
+
 - `message`
 - `typing`
 - `notification`
 
+Si Redis no está disponible, Socket.IO **degrada a modo single-node** y sigue funcionando (sin sincronización multi-instancia).
+
 ---
 
-## Cómo consumir la API desde React
+## 🧩 Cómo lo consume un frontend React
 
-### Axios
+En este repo hay utilidades de consumo en `src/lib/axios.ts` y `src/features/*/api`.
+
+### Axios (con JWT + idempotencia)
 
 ```ts
 import axios from 'axios';
@@ -469,86 +290,73 @@ export const api = axios.create({
 });
 ```
 
+En el proyecto, el interceptor agrega:
+- `Authorization: Bearer <token>` si hay sesión.
+- `Idempotency-Key` automático en POST.
+
 ### Socket.IO
 
 ```ts
 import { io } from 'socket.io-client';
 
 const socket = io('https://next-utn-production.up.railway.app', {
-  auth: {
-    token: localStorage.getItem('token')
-  }
-});
-```
-
-### Typing desde frontend
-
-```ts
-await api.post('/messages/typing', {
-  chatId,
-  isTyping: true
+  auth: { token: localStorage.getItem('token') }
 });
 ```
 
 ---
 
-## Qué cumple de la consigna
+## 🏗️ Arquitectura (resumen honesto)
 
-### Requisitos mínimos
-- servidor con Express
-- rutas organizadas
-- middlewares
-- `/users`, `/chats`, `/messages`
-- conexión a MongoDB
-- respuestas estandarizadas
-- integración con frontend
-- manejo de errores
+El proyecto está organizado en capas **Domain / Application / Infrastructure / Presentation**:
 
-### Bonus
-- JWT
-- Zod
-- paginación
-- `.env`
+- **Domain**: entidades, eventos y reglas de negocio puras.
+- **Application**: casos de uso y puertos (interfaces).
+- **Infrastructure**: Mongo, Redis, Socket.IO, JWT, repositorios concretos.
+- **Presentation**: Express, controladores, middlewares, rutas.
+
+¿Tradeoff? Es más verboso que un “CRUD directo”, pero a cambio es más fácil testear, aislar dependencias y explicar el porqué de cada pieza.
 
 ---
 
-## Qué se agregó además de la consigna y del bonus
+## ✅ Qué resuelve cada agregado (verificado en código)
 
-Además de cumplir lo pedido, el proyecto incorpora:
+- **JWT**: protege endpoints y handshake de Socket.IO.
+- **Validación con Zod**: schemas en `src/presentation/schemas`.
+- **Paginación por cursor**: chats y mensajes usan `cursor` + `limit`.
+- **Rate limiting**: middleware global con Redis.
+- **Idempotencia**: POST /chats y POST /messages aceptan `Idempotency-Key`.
+- **Circuit breaker**: bloquea requests si Mongo/Redis reportan estado `OPEN`.
+- **WebSockets + Redis adapter**: tiempo real con fallback a single-node.
+- **Eventos de dominio**: mensajes y notificaciones se publican vía EventBus.
 
-- Clean Architecture
-- DTOs explícitos
-- borrado en cascada transaccional
-- WebSockets con Socket.IO
-- Redis adapter con degradación segura
-- rate limiting
-- idempotencia
-- circuit breaker
-- suite de tests amplia y verde
-- alineación contractual real backend ↔ frontend
-
-### Qué resuelven estos agregados
-
-- **DTOs**: evitan filtrar entidades internas al frontend
-- **cascade delete**: mantiene coherencia al borrar usuarios
-- **rate limiting / idempotencia / circuit breaker**: hacen la API más robusta
-- **WebSockets**: permiten feedback en tiempo real
-- **tests amplios**: reducen regresiones y hacen la entrega más defendible
+Si algo no está en código, no lo vas a ver acá. La idea es **documentar solo lo verificable**.
 
 ---
 
-## Qué entregar
+## 🧾 Cómo revisar la entrega (mapeo a la consigna)
 
-Para una entrega prolija, conviene presentar:
+1) **API REST con Express + MongoDB**
+   - Endpoints `/users`, `/chats`, `/messages`.
+   - Conexión MongoDB en `src/infrastructure/database`.
 
-1. el repositorio GitHub del backend
-2. este `README.md`
-3. `.env.example`
-4. la URL deployada en Railway
-5. opcionalmente, el frontend como demostración de integración
+2) **Respuestas estandarizadas**
+   - `successResponse` / `errorResponse` en `src/presentation/utils/response`.
+
+3) **Estructura en capas / controladores / rutas**
+   - `src/presentation/routes` y `controllers`.
+   - Capas separadas (Domain / Application / Infrastructure / Presentation).
+
+4) **Integración con frontend**
+   - Ejemplos de consumo con Axios + Socket.IO.
+
+5) **Bonus**
+   - JWT, Zod, paginación por cursor, `.env`, rate limiting, idempotencia.
+
+Si querés una revisión rápida: levantá el proyecto, probá `/health`, registrá un usuario, hacé login, creá un chat, enviá mensajes y verificá el historial con cursor.
 
 ---
 
-## Estado final
+## 📎 Notas finales
 
-El backend quedó **entregable respecto a la consigna** y además incorpora varias mejoras extra que no eran obligatorias, pero elevan la calidad técnica del trabajo.
+Este README intenta explicar las decisiones principales del proyecto y cómo probarlo. Si algo genera duda, lo mejor es mirar el código y validar los endpoints con Postman, Insomnia o `curl`.
